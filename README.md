@@ -54,6 +54,19 @@ bun install
 bun run dev
 ```
 
+Abrir con un `app_id` válido (crear tenant con `create_application`):
+
+- Login: http://localhost:5173/login?app_id=app_XXXX
+- Registro: http://localhost:5173/register?app_id=app_XXXX
+
+Opcional: `&redirect_uri=` debe coincidir exactamente con una URI whitelist del tenant.
+
+Tras cambiar el OpenAPI del backend, regenerar tipos TS:
+
+```bash
+cd frontend && bun run generate:api
+```
+
 ## Notas
 
 - `backend/Pipfile.lock` **sí se versiona** (builds reproducibles).
@@ -62,6 +75,10 @@ bun run dev
 - **MediaPipe ≥ 1.0** ya no expone `mp.solutions` (Face Mesh clásico). El liveness activo usa **Face Landmarker (Tasks API)**; el archivo `face_landmarker.task` se descarga con verificación SHA-256.
 - **MiniFASNetV2.onnx** puede requerir colocación manual si las URLs de descarga fallan. En ese caso usa `--mock-passive` en `demo_biometric_flow` para probar enroll/auth sin el clasificador pasivo.
 - Errores del pipeline HTTP usan el payload uniforme `{code, message, field}` (ver `docs/ARCHITECTURE.md` §3.3).
+
+## Frontend — Fase 4
+
+Flujos A/B (login/registro) con captura de cámara, TanStack Query y tipos generados desde `backend/schema.json`. Ver [`frontend/README.md`](frontend/README.md).
 
 ## API — Fase 3 (OpenAPI)
 

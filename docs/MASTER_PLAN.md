@@ -6,7 +6,7 @@
 >
 > Diseño de referencia: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (estructura de carpetas, modelos de datos, especificación del pipeline).
 
-**Estado global del proyecto:** 🟡 Fase 3 implementada — pendiente revisión manual antes de Fase 4.
+**Estado global del proyecto:** 🟡 Fase 4 implementada — pendiente revisión manual antes de Fase 5.
 
 ---
 
@@ -97,32 +97,32 @@
 **Objetivo:** frontend funcional que consume el API generado, implementando los Flujos A y B descritos en los requerimientos.
 
 ### 4.1 Fundación
-- [ ] Generar tipos TS desde `schema.json` (`openapi-typescript` u `orval`) hacia `src/api/generated/`, con script `bun run generate:api` documentado.
-- [ ] Cliente HTTP base (`src/api/client.ts`) + configuración de TanStack Query (`QueryClientProvider`).
-- [ ] `TenantContext`: lee `?app_id=` de la URL, llama a `GET /applications/{app_id}/`; si no existe/inactiva → redirige a página 404 propia.
-- [ ] Router (`react-router` o similar) con rutas: `/login`, `/register`, `/404`, guardadas por `TenantContext`.
+- [x] Generar tipos TS desde `schema.json` (`openapi-typescript` u `orval`) hacia `src/api/generated/`, con script `bun run generate:api` documentado.
+- [x] Cliente HTTP base (`src/api/client.ts`) + configuración de TanStack Query (`QueryClientProvider`).
+- [x] `TenantContext`: lee `?app_id=` de la URL, llama a `GET /applications/{app_id}/`; si no existe/inactiva → redirige a página 404 propia.
+- [x] Router (`react-router` o similar) con rutas: `/login`, `/register`, `/404`, guardadas por `TenantContext`.
 
 ### 4.2 Captura de video
-- [ ] Componente `CameraCapture`: solicita permiso de cámara (`getUserMedia`), preview en vivo.
-- [ ] `videoRecorder.ts`: graba clip de 2-3s con `MediaRecorder`, con guía visual (cuenta regresiva, encuadre de rostro) siguiendo un "estándar seguro" (resolución mínima, códec soportado por el backend).
-- [ ] Manejo de errores de permisos de cámara (denegado, no disponible) con mensajes claros.
+- [x] Componente `CameraCapture`: solicita permiso de cámara (`getUserMedia`), preview en vivo.
+- [x] `videoRecorder.ts`: graba clip de 2-3s con `MediaRecorder`, con guía visual (cuenta regresiva, encuadre de rostro) siguiendo un "estándar seguro" (resolución mínima, códec soportado por el backend).
+- [x] Manejo de errores de permisos de cámara (denegado, no disponible) con mensajes claros.
 
 ### 4.3 Flujo A — Login
-- [ ] `LoginPage`: botón "Iniciar Sesión" → abre `CameraCapture` → al capturar, envía video vía `useLogin` (mutation de TanStack Query, `multipart/form-data`).
-- [ ] Estado de carga durante el procesamiento (pipeline puede tardar unos segundos) con feedback visual.
-- [ ] En éxito: redirección a la `redirect_url`/token devuelto por el backend.
-- [ ] En error: mostrar motivo descriptivo (reutilizando el payload de error del contrato) y permitir reintentar captura sin recargar la página.
+- [x] `LoginPage`: botón "Iniciar Sesión" → abre `CameraCapture` → al capturar, envía video vía `useLogin` (mutation de TanStack Query, `multipart/form-data`).
+- [x] Estado de carga durante el procesamiento (pipeline puede tardar unos segundos) con feedback visual.
+- [x] En éxito: redirección a la `redirect_url`/token devuelto por el backend.
+- [x] En error: mostrar motivo descriptivo (reutilizando el payload de error del contrato) y permitir reintentar captura sin recargar la página.
 
 ### 4.4 Flujo B — Registro
-- [ ] `RegisterPage`: formulario tradicional (nombres, apellidos, correo, teléfono) con validación de campos (`react-hook-form` + `zod`, recomendado).
-- [ ] Botón "Registro Biométrico" habilita `CameraCapture`; al capturar, envía `FormData` combinando texto + video vía `useRegister`.
-- [ ] **Regla crítica de UX:** en caso de error (liveness fallido, email duplicado, etc.) el formulario **no se resetea**; solo se limpia el video capturado, permitiendo reintentar la captura conservando los datos ya ingresados.
-- [ ] En éxito: guardar sesión/token y redirigir a la pantalla de inicio de la app cliente.
+- [x] `RegisterPage`: formulario tradicional (nombres, apellidos, correo, teléfono) con validación de campos (`react-hook-form` + `zod`, recomendado).
+- [x] Botón "Registro Biométrico" habilita `CameraCapture`; al capturar, envía `FormData` combinando texto + video vía `useRegister`.
+- [x] **Regla crítica de UX:** en caso de error (liveness fallido, email duplicado, etc.) el formulario **no se resetea**; solo se limpia el video capturado, permitiendo reintentar la captura conservando los datos ya ingresados.
+- [x] En éxito: guardar sesión/token y redirigir a la pantalla de inicio de la app cliente.
 
 ### 4.5 UI/UX
-- [ ] Componentes `shadcn/ui` para formularios, botones, alertas de error, spinners.
-- [ ] Página 404 dedicada para `app_id` inválido/ausente.
-- [ ] Diseño responsive (mobile-first, ya que la cámara se usará mayormente en dispositivos móviles).
+- [x] Componentes `shadcn/ui` para formularios, botones, alertas de error, spinners.
+- [x] Página 404 dedicada para `app_id` inválido/ausente.
+- [x] Diseño responsive (mobile-first, ya que la cámara se usará mayormente en dispositivos móviles).
 
 **Criterio de aceptación:** flujo completo de registro y login funcionando end-to-end contra el backend real, sin mocks; tipos TS regenerados reflejan el contrato actual sin `any` manuales.
 
@@ -169,4 +169,4 @@
 
 ## Próximo paso
 
-Fase 3 lista para **revisión manual**. Tras tu OK, continuar con la **Fase 4 (Frontend)**.
+Fase 4 lista para **revisión manual**. Tras tu OK, continuar con la **Fase 5 (Pruebas & Hardening)**.

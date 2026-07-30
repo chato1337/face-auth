@@ -1,32 +1,34 @@
-# React + TypeScript + Vite
+# Face-Auth Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Vite + React + TypeScript. Flujos de login y registro biométrico (Fase 4).
 
-Currently, two official plugins are available:
+## Arranque
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+bun install
+cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8000
+bun run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Abrir con tenant válido, por ejemplo:
+
+- http://localhost:5173/login?app_id=app_XXXX
+- http://localhost:5173/register?app_id=app_XXXX&redirect_uri=http://localhost:3000/callback
+
+## Scripts
+
+| Comando | Descripción |
+|---------|-------------|
+| `bun run dev` | Servidor de desarrollo |
+| `bun run build` | Typecheck + build producción |
+| `bun run generate:api` | Regenera `src/api/generated/schema.d.ts` desde `backend/schema.json` |
+| `bun run lint` | Oxlint |
+
+Tras cambios en el contrato OpenAPI del backend:
+
+```bash
+cd ../backend
+pipenv run python manage.py spectacular --file schema.json --format openapi-json --fail-on-warn --validate
+cd ../frontend
+bun run generate:api
+```

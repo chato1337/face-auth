@@ -1,6 +1,6 @@
 # Face-Auth — Documento de Arquitectura
 
-> Estado: **Fase 3 (OpenAPI & contratos) implementada — pendiente revisión manual antes de Fase 4.**
+> Estado: **Fase 4 (Frontend) implementada — pendiente revisión manual antes de Fase 5.**
 > Este documento es la fuente de verdad sobre la estructura y el diseño de datos del sistema. Debe mantenerse actualizado a medida que el proyecto evoluciona. Ver [`MASTER_PLAN.md`](../MASTER_PLAN.md) para el plan de ejecución por fases.
 
 ## 1. Estructura del Monorepo
