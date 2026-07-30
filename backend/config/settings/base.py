@@ -140,6 +140,13 @@ SPECTACULAR_SETTINGS = {
     "TAGS": [
         {"name": "tenants", "description": "Validación pública de Applications."},
         {"name": "auth", "description": "Login / registro biométrico y refresh de tokens."},
+        {
+            "name": "admin",
+            "description": (
+                "Panel de administración de plataforma (Fase 6). "
+                "Requiere JWT de Django User con is_superuser=True."
+            ),
+        },
         {"name": "system", "description": "Health y utilidades."},
     ],
 }

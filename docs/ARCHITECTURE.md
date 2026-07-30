@@ -1,7 +1,7 @@
 # Face-Auth — Documento de Arquitectura
 
-> Estado: **Fase 5 (Pruebas & Hardening) implementada — pendiente revisión manual.**
-> Este documento es la fuente de verdad sobre la estructura y el diseño de datos del sistema. Debe mantenerse actualizado a medida que el proyecto evoluciona. Ver [`MASTER_PLAN.md`](../MASTER_PLAN.md) para el plan de ejecución por fases. Operaciones: [`OPERATIONS.md`](OPERATIONS.md).
+> Estado: **Fase 6 (Panel de Administración) implementada — pendiente revisión manual.**
+> Este documento es la fuente de verdad sobre la estructura y el diseño de datos del sistema. Debe mantenerse actualizado a medida que el proyecto evoluciona. Ver [`MASTER_PLAN.md`](MASTER_PLAN.md) para el plan de ejecución por fases. Operaciones: [`OPERATIONS.md`](OPERATIONS.md).
 
 ## 1. Estructura del Monorepo
 
@@ -33,18 +33,20 @@ face-auth/
 │   ├── apps/
 │   │   ├── tenants/                       # Application (app_id) — límites del multi-tenant
 │   │   │   ├── models.py
-│   │   │   ├── admin.py
-│   │   │   ├── serializers.py
-│   │   │   ├── views.py
+│   │   │   ├── admin.py                   # Django Admin (escape hatch)
+│   │   │   ├── serializers.py             # públicos + admin
+│   │   │   ├── views.py                   # GET público por app_id
+│   │   │   ├── admin_views.py             # CRUD admin (Fase 6)
 │   │   │   ├── urls.py
+│   │   │   ├── admin_urls.py
 │   │   │   └── migrations/
 │   │   │
 │   │   ├── accounts/                      # TenantUser + BiometricProfile
 │   │   │   ├── models.py
 │   │   │   ├── admin.py
-│   │   │   ├── serializers.py
-│   │   │   ├── views.py
-│   │   │   ├── urls.py
+│   │   │   ├── serializers.py             # serializers admin (Fase 6)
+│   │   │   ├── admin_views.py             # list/patch users + biometric profiles
+│   │   │   ├── admin_urls.py
 │   │   │   └── migrations/
 │   │   │
 │   │   ├── biometrics/                    # Pipeline de reconocimiento/liveness
@@ -62,23 +64,27 @@ face-auth/
 │   │   │   ├── views.py
 │   │   │   └── urls.py
 │   │   │
-│   │   └── authentication/                # Emisión de JWT / authorization code (flujo SSO)
-│   │       ├── services.py
+│   │   └── authentication/                # Emisión de JWT SSO (TenantUser) + auth admin (Django User)
+│   │       ├── services.py                # tokens TenantUser / SSO redirect
+│   │       ├── admin_services.py          # login/refresh para operadores (is_superuser)
 │   │       ├── serializers.py
+│   │       ├── admin_serializers.py
 │   │       ├── views.py
-│   │       └── urls.py
+│   │       ├── admin_views.py
+│   │       ├── urls.py
+│   │       └── admin_urls.py
 │   │
 │   ├── core/                     # utilidades transversales
-│   │   ├── permissions.py        # HasValidAppId, IsAppActive
-│   │   ├── middleware.py         # resuelve y adjunta `request.application` desde app_id
-│   │   ├── pagination.py
+│   │   ├── permissions.py        # HasValidAppId, IsSuperUser (admin v1)
+│   │   ├── middleware.py         # resuelve `request.application`; excluye `/api/v1/admin/`
+│   │   ├── pagination.py         # page size default para listados admin
 │   │   └── exceptions.py         # exception handler DRF uniforme
 │   │
 │   ├── tests/
 │   │   ├── unit/
-│   │   └── integration/
+│   │   └── integration/          # incluye tests de API admin
 │   │
-│   └── schema.json                # generado por drf-spectacular (contract-first)
+│   └── schema.json                # generado por drf-spectacular (contract-first; tag `admin`)
 │
 └── frontend/
     ├── package.json               # gestionado con bun
@@ -93,34 +99,46 @@ face-auth/
         ├── main.tsx
         ├── App.tsx
         ├── api/
-        │   ├── client.ts           # fetch wrapper (base url, headers, error mapping)
+        │   ├── client.ts           # fetch wrapper (SSO + Bearer admin)
         │   ├── generated/
         │   │   └── schema.d.ts     # salida de openapi-typescript sobre schema.json
-        │   └── hooks/              # TanStack Query hooks tipados
+        │   └── hooks/
         │       ├── useLogin.ts
         │       ├── useRegister.ts
-        │       └── useApplication.ts
+        │       ├── useApplication.ts
+        │       └── admin/          # hooks del panel (auth, applications, users)
         ├── components/
         │   ├── ui/                 # primitivos shadcn/ui
         │   ├── camera/
         │   │   ├── CameraCapture.tsx
         │   │   └── videoRecorder.ts # MediaRecorder wrapper (clip 2-3s, códec, límites)
         │   └── layout/
+        │       ├── AuthShell.tsx   # shell SSO
+        │       └── AdminShell.tsx  # shell panel operadores
         ├── features/
         │   ├── login/LoginPage.tsx
         │   ├── register/RegisterPage.tsx
-        │   └── not-found/NotFoundPage.tsx
+        │   ├── not-found/NotFoundPage.tsx
+        │   └── admin/              # panel de administración (Fase 6)
+        │       ├── AdminLoginPage.tsx
+        │       ├── applications/
+        │       └── users/
         ├── context/
-        │   └── TenantContext.tsx   # valida `?app_id=` contra el backend, cachea resultado
-        ├── router/routes.tsx
-        ├── lib/utils.ts
+        │   ├── TenantContext.tsx   # valida `?app_id=` (solo flujos SSO)
+        │   └── AdminAuthContext.tsx
+        ├── router/routes.tsx       # `/login|register` + `/admin/*`
+        ├── lib/
+        │   ├── utils.ts
+        │   ├── session.ts         # tokens TenantUser (SSO)
+        │   └── adminSession.ts    # tokens operador (Django User)
         └── styles/globals.css
 ```
 
 **Decisiones clave de la estructura:**
 - `apps/tenants` está desacoplada de `apps/accounts` para que el límite del multi-tenant (qué es una `Application`) sea explícito y auditable por separado del modelo de usuario.
 - `apps/biometrics/services/` concentra **todo** el pipeline de IA como servicios de Python puros (sin dependencias de Django REST más allá de excepciones), de forma que sean testeables de forma aislada y reemplazables (p. ej. cambiar `buffalo_s` por otro backbone sin tocar las vistas).
-- `core/middleware.py` centraliza la resolución de `app_id` → `Application` una sola vez por request, evitando repetir lookups en cada vista.
+- `core/middleware.py` centraliza la resolución de `app_id` → `Application` una sola vez por request, evitando repetir lookups en cada vista. El prefijo `/api/v1/admin/` queda excluido: el panel opera a nivel de plataforma, no de tenant header.
+- El panel admin reutiliza el mismo frontend SPA bajo `/admin/*`, separado del SSO por contexto de auth (`AdminAuthContext` vs `TenantContext`) y almacén de sesión (`adminSession` vs `session`).
 - **Gestión de paquetes con `pipenv`** (en vez de `requirements/*.txt` planos): un único `Pipfile` declara runtime (`[packages]`, incluye Django, DRF y todo el stack biométrico) y herramientas de desarrollo (`[dev-packages]`: pytest, ruff, black, mypy). `Pipfile.lock` sí se versiona para builds reproducibles; producción se instala con `pipenv install --deploy --ignore-pipfile` (solo runtime, sin dev-packages).
 
 ---
@@ -388,4 +406,53 @@ Cada etapa lanza una excepción propia y descriptiva (definidas en `apps/biometr
 
 ---
 
-Ver el plan de ejecución detallado en [`MASTER_PLAN.md`](../MASTER_PLAN.md).
+## 4. Panel de Administración (Fase 6)
+
+El panel es la UI operativa de plataforma. **No** forma parte del flujo SSO biométrico: los operadores son `django.contrib.auth.User`, los usuarios finales son `TenantUser`.
+
+### 4.1 Modelo de acceso (v1 → evolución)
+
+| Versión | Quién entra | Cómo | Gate |
+|---------|-------------|------|------|
+| **v1 (actual)** | Operadores internos | `POST /api/v1/admin/auth/login/` con username/password → JWT SimpleJWT de Django User | `user.is_active and user.is_superuser` (`IsSuperUser`) |
+| Futuro | Roles (`platform_admin`, `tenant_operator`, …) | Mismo contrato de tokens; claims/roles ampliados | Permission plug-in reemplazando/ampliando `IsSuperUser` sin cambiar paths |
+
+Django Admin (`/admin/`) permanece como escape hatch. CLI (`create_application`, `rotate_api_key`) sigue válido para automatización.
+
+### 4.2 Superficie HTTP
+
+Prefijo: `/api/v1/admin/`. Tag OpenAPI: `admin`. Auth: `Authorization: Bearer <access>` (SimpleJWT / Django User).
+
+| Método | Path | Rol |
+|--------|------|-----|
+| POST | `/auth/login/` | Emitir access/refresh si `is_superuser` |
+| POST | `/auth/token/refresh/` | Renovar access |
+| GET | `/auth/me/` | Datos del operador autenticado |
+| GET/POST | `/applications/` | Listar / crear tenants |
+| GET/PATCH | `/applications/{app_id}/` | Detalle / editar (name, active, redirect_uris, umbrales) |
+| POST | `/applications/{app_id}/rotate-api-key/` | Rotar clave; plaintext **one-shot** en la respuesta |
+| GET | `/applications/{app_id}/users/` | Usuarios del tenant (filtros + paginación) |
+| GET/PATCH | `/users/{user_id}/` | Detalle / activar-desactivar / editar perfil |
+| GET | `/users/{user_id}/biometric-profiles/` | Perfiles del usuario (**sin** vector embedding) |
+| PATCH | `/biometric-profiles/{profile_id}/` | Solo `is_active` (soft-deactivate) |
+
+Reglas de seguridad de datos:
+- `api_key` **no** se incluye en list/retrieve; solo en la respuesta de create (si aplica política one-shot) y `rotate-api-key`.
+- El embedding 512-d **nunca** se serializa hacia el panel.
+- El alta de `TenantUser` sigue siendo el Flujo B biométrico; el panel no crea usuarios con video en v1.
+
+### 4.3 Frontend
+
+Rutas bajo `/admin/*` (sin `TenantProvider`):
+
+- `/admin/login` — credenciales Django
+- `/admin/applications` — listado + alta
+- `/admin/applications/:appId` — detalle, edición, rotar key
+- `/admin/applications/:appId/users` — usuarios del tenant
+- `/admin/users/:userId` — detalle usuario + perfiles biométricos
+
+Guard: redirige a `/admin/login` si no hay sesión de operador válida.
+
+---
+
+Ver el plan de ejecución detallado en [`MASTER_PLAN.md`](MASTER_PLAN.md).

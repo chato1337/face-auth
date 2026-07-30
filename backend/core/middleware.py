@@ -22,6 +22,8 @@ PUBLIC_API_PREFIXES = (
     "/api/v1/health",
     "/api/v1/applications/",
     "/api/v1/auth/",
+    # Panel admin: auth de operadores (Django User); tenant va en path/query, no X-App-Id.
+    "/api/v1/admin/",
 )
 
 

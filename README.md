@@ -54,10 +54,11 @@ bun install
 bun run dev
 ```
 
-Abrir con un `app_id` válido (crear tenant con `create_application`):
+Abrir con un `app_id` válido (crear tenant desde el panel admin o con `create_application`):
 
 - Login: http://localhost:5173/login?app_id=app_XXXX
 - Registro: http://localhost:5173/register?app_id=app_XXXX
+- **Panel admin:** http://localhost:5173/admin/login (requiere `createsuperuser` / `is_superuser`)
 
 Opcional: `&redirect_uri=` debe coincidir exactamente con una URI whitelist del tenant.
 
@@ -89,6 +90,13 @@ Flujos A/B (login/registro) con captura de cámara, TanStack Query y tipos gener
 - Benchmarks: `benchmark_pipeline`, `benchmark_vector_search`, `evaluate_liveness`
 - Ops: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) · Datasets: [`docs/datasets/README.md`](docs/datasets/README.md)
 - CI: `.github/workflows/ci.yml` (lint + tests + coverage)
+
+## Panel admin — Fase 6
+
+- SPA en `/admin/*` (fuera de `TenantProvider`)
+- API `/api/v1/admin/` protegida con JWT de Django User + `is_superuser`
+- CRUD de tenants, listado/edición de `TenantUser`, soft-deactivate de perfiles biométricos
+- Roles granulares quedan fuera de v1 (ver `docs/MASTER_PLAN.md` Fase 6)
 
 ## API — Fase 3 (OpenAPI)
 

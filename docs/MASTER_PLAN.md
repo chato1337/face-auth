@@ -6,7 +6,7 @@
 >
 > Diseño de referencia: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (estructura de carpetas, modelos de datos, especificación del pipeline).
 
-**Estado global del proyecto:** 🟡 Fase 5 implementada — pendiente revisión manual (hardening completo).
+**Estado global del proyecto:** 🟡 Fase 6 implementada — pendiente revisión manual del panel admin.
 
 ---
 
@@ -160,15 +160,64 @@
 
 ---
 
+## Fase 6 — Panel de Administración
+
+**Objetivo:** exponer un panel web (SPA) para que operadores de plataforma administren tenants (`Application`), usuarios (`TenantUser`) y perfiles biométricos asociados, sin depender del Django Admin como UI principal. El acceso inicial se restringe a usuarios Django con `is_superuser=True`; el diseño de permisos debe permitir evolucionar a roles (p. ej. `staff` por tenant) sin reescribir el contrato.
+
+> **Alcance de autenticación (v1):** el panel **no** usa `TenantUser` ni el flujo biométrico. Los operadores inician sesión con credenciales de `django.contrib.auth.User`. Solo se admite `is_superuser`. Django Admin (`/admin/`) permanece como escape hatch.
+
+### 6.1 Backend — API Admin (`/api/v1/admin/`)
+- [x] Permission `core/permissions.py::IsSuperUser` (y alias/documentación para futura `IsPlatformOperator` basada en roles).
+- [x] Excluir el prefijo `/api/v1/admin/` del `ApplicationResolverMiddleware` (las rutas admin no dependen de `X-App-Id`; el tenant se filtra por path/query).
+- [x] Auth de operadores: `POST /api/v1/admin/auth/login/` (username + password → access/refresh JWT de Django User) + `POST /api/v1/admin/auth/token/refresh/` + `GET /api/v1/admin/auth/me/`.
+- [x] Rechazar login si el usuario no es `is_active` o no es `is_superuser` (403 con código estable, p. ej. `not_superuser`).
+- [x] CRUD de tenants:
+  - [x] `GET|POST /api/v1/admin/applications/`
+  - [x] `GET|PATCH /api/v1/admin/applications/{app_id}/` (activar/desactivar, editar `name`, `redirect_uris`, umbrales).
+  - [x] `POST /api/v1/admin/applications/{app_id}/rotate-api-key/` (devuelve la nueva clave **una sola vez**; no exponer `api_key` en list/retrieve habitual).
+- [x] Gestión de usuarios por tenant:
+  - [x] `GET /api/v1/admin/applications/{app_id}/users/` (filtros: email, `is_active`; paginación).
+  - [x] `GET|PATCH /api/v1/admin/users/{user_id}/` (activar/desactivar, editar datos de perfil; **sin** crear usuarios por formulario admin en v1 — el alta biométrica sigue siendo el Flujo B).
+- [x] Perfiles biométricos (solo lectura + soft-deactivate):
+  - [x] `GET /api/v1/admin/users/{user_id}/biometric-profiles/`
+  - [x] `PATCH /api/v1/admin/biometric-profiles/{profile_id}/` (`is_active` únicamente; nunca devolver el vector `embedding` completo en listados).
+- [x] Serializers admin tipados + `@extend_schema` (tag OpenAPI `admin`) + regenerar `backend/schema.json`.
+- [x] Paginación DRF operativa en `core/pagination.py` (page size razonable, p. ej. 25).
+- [x] Suite de tests de integración: login superuser OK / staff no-superuser 403 / CRUD tenant aislado / rotación de `api_key` / listado de users filtrado por `app_id`.
+
+### 6.2 Frontend — Panel SPA (`/admin/*`)
+- [x] Rutas admin **fuera** de `TenantProvider` (no requieren `?app_id=`): `/admin/login`, `/admin/applications`, `/admin/applications/:appId`, `/admin/applications/:appId/users`, `/admin/users/:userId`.
+- [x] `AdminAuthContext` + guard de rutas: sesión de operador (JWT staff) separada de la sesión SSO de `TenantUser` (`session.ts` vs `adminSession.ts`).
+- [x] Extender `api/client.ts` para adjuntar `Authorization: Bearer <admin_access>` en llamadas `/api/v1/admin/*` y refrescar token ante 401.
+- [x] Regenerar tipos (`bun run generate:api`) y hooks TanStack Query en `src/api/hooks/admin/`.
+- [x] `AdminLoginPage`: formulario username/password → login admin; mensaje claro si no es superuser.
+- [x] `AdminShell`: layout con navegación (Applications, logout); sin cards innecesarias — UI operativa clara.
+- [x] `ApplicationsListPage` + create/edit: alta de tenant, toggle `is_active`, edición de `redirect_uris` y umbrales.
+- [x] `ApplicationDetailPage`: resumen del tenant + acción "Rotar API key" con confirmación y visualización one-shot de la clave.
+- [x] `TenantUsersListPage` / `TenantUserDetailPage`: listado filtrable, activar/desactivar usuario, ver perfiles biométricos y desactivar embeddings.
+- [x] Página / estado 403-friendly si el token deja de ser válido o el usuario pierde privilegios.
+
+### 6.3 Documentación y cierre
+- [x] Actualizar `docs/OPERATIONS.md`: flujo preferido vía panel SPA; Django Admin y CLI como alternativas.
+- [x] Actualizar árbol y sección de permisos en `docs/ARCHITECTURE.md` (§1 y nueva §4 Panel Admin).
+- [x] README: enlace al panel (`/admin/login`) y nota de que requiere `createsuperuser`.
+
+**Criterio de aceptación:** un superuser creado con `createsuperuser` puede iniciar sesión en `/admin/login`, crear un tenant, rotar su `api_key`, listar/desactivar usuarios de ese tenant y desactivar un perfil biométrico; un usuario Django `is_staff=True` pero `is_superuser=False` recibe 403 en toda la API admin; el schema OpenAPI incluye el tag `admin` sin warnings; los flujos SSO (`/login`, `/register`) no se ven afectados.
+
+> **Evolución futura (fuera de v1):** roles granulares (`platform_admin`, `tenant_operator`), scoping por `Application`, auditoría de acciones admin, creación asistida de usuarios sin video, hashing de `api_key` en reposo.
+
+---
+
 ## Registro de decisiones pendientes (a resolver antes/durante Fase 2-3)
 
 - [x] Mecanismo exacto de "authorization code" para el SSO → **JWT de un solo uso** (`SSORedirectToken`, `purpose=sso_redirect`) + access/refresh. OAuth2 code-exchange como evolución.
 - [x] Formato/códec del video → mp4/webm vía OpenCV; máx. 15 MB; duración 1–6 s; resolución mín. 320×240 (ajustable en `FramePreprocessor`).
 - [x] Duplicados en registro → unicidad de **email por `application`** (+ detección biométrica `DuplicateBiometricError`). Teléfono no es clave única por ahora.
 - [ ] Estrategia de particionamiento de `BiometricProfile` si un tenant supera cierto volumen (ver nota en `docs/ARCHITECTURE.md §2.2`).
+- [x] Auth del panel admin (Fase 6) → JWT de `django.contrib.auth.User` + gate `is_superuser` (roles diferidos).
 
 ---
 
 ## Próximo paso
 
-Fase 5 lista para **revisión manual**. El plan de fases core queda cerrado tras tu OK; evolución futura (OAuth2 code-exchange, particionamiento de `BiometricProfile`, hashing de `api_key`) queda fuera del alcance inicial.
+Fase 6 lista para **revisión manual** del panel (`/admin/login` + API `/api/v1/admin/`). Evolución a roles queda fuera de v1.

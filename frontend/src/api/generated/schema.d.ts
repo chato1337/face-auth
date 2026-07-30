@@ -4,6 +4,182 @@
  */
 
 export interface paths {
+    "/api/v1/admin/applications/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar tenants */
+        get: operations["v1_admin_applications_list"];
+        put?: never;
+        /** Crear tenant */
+        post: operations["v1_admin_applications_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/applications/{app_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de tenant */
+        get: operations["v1_admin_applications_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Actualizar tenant */
+        patch: operations["v1_admin_applications_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/admin/applications/{app_id}/rotate-api-key/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotar api_key del tenant
+         * @description Invalida la clave anterior. La nueva se devuelve **una sola vez** en claro.
+         */
+        post: operations["v1_admin_applications_rotate_api_key_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/applications/{app_id}/users/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar usuarios de un tenant */
+        get: operations["v1_admin_applications_users_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/login/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login de operador (superuser) */
+        post: operations["v1_admin_auth_login_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/me/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Operador autenticado */
+        get: operations["v1_admin_auth_me_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/token/refresh/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refrescar access token de operador */
+        post: operations["v1_admin_auth_token_refresh_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/biometric-profiles/{profile_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Activar/desactivar perfil biométrico */
+        patch: operations["v1_admin_biometric_profiles_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de usuario tenant */
+        get: operations["v1_admin_users_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Actualizar usuario tenant */
+        patch: operations["v1_admin_users_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/biometric-profiles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Perfiles biométricos de un usuario (sin embedding) */
+        get: operations["v1_admin_users_biometric_profiles_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{app_id}/": {
         parameters: {
             query?: never;
@@ -106,6 +282,108 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminLoginRequestRequest: {
+            username: string;
+            password: string;
+        };
+        AdminLoginResponse: {
+            access: string;
+            refresh: string;
+            username: string;
+            email: string;
+        };
+        AdminMe: {
+            id: number;
+            username: string;
+            email: string;
+            is_superuser: boolean;
+            is_staff: boolean;
+        };
+        AdminTokenRefreshRequestRequest: {
+            refresh: string;
+        };
+        AdminTokenRefreshResponse: {
+            access: string;
+            refresh?: string;
+        };
+        /** @description List/retrieve/update admin — nunca expone api_key. */
+        ApplicationAdmin: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly app_id: string;
+            name: string;
+            is_active?: boolean;
+            /** @description Whitelist exacta de URLs a las que se permite redirigir tras login. */
+            redirect_uris?: unknown;
+            /**
+             * Format: double
+             * @description Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento.
+             */
+            liveness_threshold?: number;
+            /**
+             * Format: double
+             * @description Distancia coseno máxima aceptada entre embedding capturado y almacenado.
+             */
+            match_threshold?: number;
+            /**
+             * Format: date-time
+             * @description Última rotación de api_key (None = clave original de creación).
+             */
+            readonly api_key_rotated_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly users_count: number;
+        };
+        /** @description Alta de tenant; la respuesta one-shot incluye api_key vía ApplicationCreatedSerializer. */
+        ApplicationAdminCreateRequest: {
+            name: string;
+            /** @description Whitelist exacta de URLs a las que se permite redirigir tras login. */
+            redirect_uris?: unknown;
+            /**
+             * Format: double
+             * @description Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento.
+             */
+            liveness_threshold?: number;
+            /**
+             * Format: double
+             * @description Distancia coseno máxima aceptada entre embedding capturado y almacenado.
+             */
+            match_threshold?: number;
+            is_active?: boolean;
+        };
+        /** @description Respuesta de create: incluye api_key una sola vez. */
+        ApplicationCreated: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly app_id: string;
+            readonly name: string;
+            /** @description Secreto de integración del tenant. Rotar con `rotate_api_key`. */
+            readonly api_key: string;
+            readonly is_active: boolean;
+            /** @description Whitelist exacta de URLs a las que se permite redirigir tras login. */
+            readonly redirect_uris: unknown;
+            /**
+             * Format: double
+             * @description Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento.
+             */
+            readonly liveness_threshold: number;
+            /**
+             * Format: double
+             * @description Distancia coseno máxima aceptada entre embedding capturado y almacenado.
+             */
+            readonly match_threshold: number;
+            /**
+             * Format: date-time
+             * @description Última rotación de api_key (None = clave original de creación).
+             */
+            readonly api_key_rotated_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         /** @description Respuesta pública de validación de tenant (sin api_key). */
         ApplicationPublic: {
             readonly app_id: string;
@@ -123,6 +401,32 @@ export interface components {
              * @description Distancia coseno máxima aceptada entre embedding capturado y almacenado.
              */
             readonly match_threshold: number;
+        };
+        ApplicationRotateApiKey: {
+            app_id: string;
+            api_key: string;
+            /** Format: date-time */
+            api_key_rotated_at: string;
+        };
+        /** @description Sin vector embedding — solo metadatos operativos. */
+        BiometricProfileAdmin: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly user_id: string;
+            readonly app_id: string;
+            readonly model_version: components["schemas"]["ModelVersionEnum"];
+            /**
+             * Format: double
+             * @description Score de anti-spoofing pasivo al momento del enrolamiento.
+             */
+            readonly liveness_score: number;
+            /** Format: double */
+            readonly quality_score: number | null;
+            /** @description Desactiva un embedding antiguo al re-enrolar sin perder histórico. */
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
         };
         ErrorResponse: {
             code: string;
@@ -163,6 +467,72 @@ export interface components {
             liveness: components["schemas"]["LivenessReport"];
             tokens: components["schemas"]["TokenPair"];
         };
+        /**
+         * @description * `buffalo_s` - InsightFace buffalo_s
+         *     * `mobilefacenet` - MobileFaceNet
+         * @enum {string}
+         */
+        ModelVersionEnum: "buffalo_s" | "mobilefacenet";
+        PaginatedApplicationAdminList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["ApplicationAdmin"][];
+        };
+        PaginatedTenantUserAdminList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["TenantUserAdmin"][];
+        };
+        /** @description List/retrieve/update admin — nunca expone api_key. */
+        PatchedApplicationAdminRequest: {
+            name?: string;
+            is_active?: boolean;
+            /** @description Whitelist exacta de URLs a las que se permite redirigir tras login. */
+            redirect_uris?: unknown;
+            /**
+             * Format: double
+             * @description Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento.
+             */
+            liveness_threshold?: number;
+            /**
+             * Format: double
+             * @description Distancia coseno máxima aceptada entre embedding capturado y almacenado.
+             */
+            match_threshold?: number;
+        };
+        PatchedBiometricProfileAdminUpdateRequest: {
+            /** @description Desactiva un embedding antiguo al re-enrolar sin perder histórico. */
+            is_active?: boolean;
+        };
+        /** @description PATCH: perfil + activar/desactivar. No crea usuarios (alta = Flujo B). */
+        PatchedTenantUserAdminUpdateRequest: {
+            first_name?: string;
+            last_name?: string;
+            /** Format: email */
+            email?: string;
+            phone?: string;
+            is_active?: boolean;
+        };
         RegisterRequestRequest: {
             app_id: string;
             first_name: string;
@@ -188,6 +558,24 @@ export interface components {
             quality_score: number;
             tokens: components["schemas"]["TokenPair"];
         };
+        TenantUserAdmin: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly app_id: string;
+            first_name: string;
+            last_name: string;
+            /** Format: email */
+            email: string;
+            phone?: string;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly last_login_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly active_profiles_count: number;
+        };
         TokenPair: {
             access: string;
             refresh: string;
@@ -212,6 +600,433 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    v1_admin_applications_list: {
+        parameters: {
+            query?: {
+                is_active?: boolean;
+                page?: number;
+                page_size?: number;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedApplicationAdminList"];
+                };
+            };
+        };
+    };
+    v1_admin_applications_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicationAdminCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ApplicationAdminCreateRequest"];
+                "multipart/form-data": components["schemas"]["ApplicationAdminCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationCreated"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_applications_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationAdmin"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_applications_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedApplicationAdminRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedApplicationAdminRequest"];
+                "multipart/form-data": components["schemas"]["PatchedApplicationAdminRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationAdmin"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_applications_rotate_api_key_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationRotateApiKey"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_applications_users_list: {
+        parameters: {
+            query?: {
+                email?: string;
+                is_active?: boolean;
+                page?: number;
+                page_size?: number;
+                q?: string;
+            };
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTenantUserAdminList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_auth_login_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminLoginRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AdminLoginRequestRequest"];
+                "multipart/form-data": components["schemas"]["AdminLoginRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminLoginResponse"];
+                };
+            };
+            /** @description Credenciales inválidas */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Usuario inactivo o sin is_superuser */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_auth_me_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMe"];
+                };
+            };
+            /** @description No es superuser */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_auth_token_refresh_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminTokenRefreshRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AdminTokenRefreshRequestRequest"];
+                "multipart/form-data": components["schemas"]["AdminTokenRefreshRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTokenRefreshResponse"];
+                };
+            };
+            /** @description Refresh inválido */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_biometric_profiles_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedBiometricProfileAdminUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedBiometricProfileAdminUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedBiometricProfileAdminUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BiometricProfileAdmin"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_users_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantUserAdmin"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_users_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedTenantUserAdminUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedTenantUserAdminUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedTenantUserAdminUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantUserAdmin"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Email duplicado en el tenant */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_users_biometric_profiles_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BiometricProfileAdmin"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     v1_applications_retrieve: {
         parameters: {
             query?: never;

@@ -6,6 +6,864 @@
         "description": "Servicio de autenticación biométrica SSO multi-tenant.\n\nErrores del pipeline biométrico usan el payload uniforme `{code, message, field}` (ver códigos en ARCHITECTURE §3.3)."
     },
     "paths": {
+        "/api/v1/admin/applications/": {
+            "get": {
+                "operationId": "v1_admin_applications_list",
+                "summary": "Listar tenants",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "is_active",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedApplicationAdminList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "v1_admin_applications_create",
+                "summary": "Crear tenant",
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApplicationAdminCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApplicationAdminCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApplicationAdminCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApplicationCreated"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/applications/{app_id}/": {
+            "get": {
+                "operationId": "v1_admin_applications_retrieve",
+                "summary": "Detalle de tenant",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "app_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApplicationAdmin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "v1_admin_applications_partial_update",
+                "summary": "Actualizar tenant",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "app_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedApplicationAdminRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedApplicationAdminRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedApplicationAdminRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApplicationAdmin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/applications/{app_id}/rotate-api-key/": {
+            "post": {
+                "operationId": "v1_admin_applications_rotate_api_key_create",
+                "description": "Invalida la clave anterior. La nueva se devuelve **una sola vez** en claro.",
+                "summary": "Rotar api_key del tenant",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "app_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApplicationRotateApiKey"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/applications/{app_id}/users/": {
+            "get": {
+                "operationId": "v1_admin_applications_users_list",
+                "summary": "Listar usuarios de un tenant",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "app_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "email",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "is_active",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedTenantUserAdminList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/auth/login/": {
+            "post": {
+                "operationId": "v1_admin_auth_login_create",
+                "summary": "Login de operador (superuser)",
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminLoginRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminLoginRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminLoginRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminLoginResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "CredencialesInválidas": {
+                                        "value": {
+                                            "code": "invalid_credentials",
+                                            "message": "Usuario o contraseña incorrectos.",
+                                            "field": null
+                                        },
+                                        "summary": "Credenciales inválidas"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Credenciales inválidas"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "NoEsSuperuser": {
+                                        "value": {
+                                            "code": "not_superuser",
+                                            "message": "Acceso al panel restringido a superusers.",
+                                            "field": null
+                                        },
+                                        "summary": "No es superuser"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Usuario inactivo o sin is_superuser"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/auth/me/": {
+            "get": {
+                "operationId": "v1_admin_auth_me_retrieve",
+                "summary": "Operador autenticado",
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminMe"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "NoEsSuperuser": {
+                                        "value": {
+                                            "code": "not_superuser",
+                                            "message": "Acceso al panel restringido a superusers.",
+                                            "field": null
+                                        },
+                                        "summary": "No es superuser"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "No es superuser"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/auth/token/refresh/": {
+            "post": {
+                "operationId": "v1_admin_auth_token_refresh_create",
+                "summary": "Refrescar access token de operador",
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminTokenRefreshRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminTokenRefreshRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminTokenRefreshRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminTokenRefreshResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "RefreshInválido": {
+                                        "value": {
+                                            "code": "invalid_token",
+                                            "message": "Refresh token inválido o expirado.",
+                                            "field": "refresh"
+                                        },
+                                        "summary": "Refresh inválido"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Refresh inválido"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/biometric-profiles/{profile_id}/": {
+            "patch": {
+                "operationId": "v1_admin_biometric_profiles_partial_update",
+                "summary": "Activar/desactivar perfil biométrico",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "profile_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedBiometricProfileAdminUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedBiometricProfileAdminUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedBiometricProfileAdminUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BiometricProfileAdmin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "PerfilNoEncontrado": {
+                                        "value": {
+                                            "code": "profile_not_found",
+                                            "message": "Perfil biométrico no encontrado.",
+                                            "field": "profile_id"
+                                        },
+                                        "summary": "Perfil no encontrado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/users/{user_id}/": {
+            "get": {
+                "operationId": "v1_admin_users_retrieve",
+                "summary": "Detalle de usuario tenant",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "user_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TenantUserAdmin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "UsuarioNoEncontrado": {
+                                        "value": {
+                                            "code": "user_not_found",
+                                            "message": "Usuario no encontrado.",
+                                            "field": "user_id"
+                                        },
+                                        "summary": "Usuario no encontrado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "v1_admin_users_partial_update",
+                "summary": "Actualizar usuario tenant",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "user_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedTenantUserAdminUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedTenantUserAdminUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedTenantUserAdminUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TenantUserAdmin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "UsuarioNoEncontrado": {
+                                        "value": {
+                                            "code": "user_not_found",
+                                            "message": "Usuario no encontrado.",
+                                            "field": "user_id"
+                                        },
+                                        "summary": "Usuario no encontrado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Email duplicado en el tenant"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/users/{user_id}/biometric-profiles/": {
+            "get": {
+                "operationId": "v1_admin_users_biometric_profiles_list",
+                "summary": "Perfiles biométricos de un usuario (sin embedding)",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "user_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/BiometricProfileAdmin"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "UsuarioNoEncontrado": {
+                                        "value": {
+                                            "code": "user_not_found",
+                                            "message": "Usuario no encontrado.",
+                                            "field": "user_id"
+                                        },
+                                        "summary": "Usuario no encontrado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/applications/{app_id}/": {
             "get": {
                 "operationId": "v1_applications_retrieve",
@@ -453,6 +1311,287 @@
     },
     "components": {
         "schemas": {
+            "AdminLoginRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "password",
+                    "username"
+                ]
+            },
+            "AdminLoginResponse": {
+                "type": "object",
+                "properties": {
+                    "access": {
+                        "type": "string"
+                    },
+                    "refresh": {
+                        "type": "string"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email"
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "access",
+                    "email",
+                    "refresh",
+                    "username"
+                ]
+            },
+            "AdminMe": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email"
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "is_superuser": {
+                        "type": "boolean"
+                    },
+                    "is_staff": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "email",
+                    "id",
+                    "is_staff",
+                    "is_superuser",
+                    "username"
+                ]
+            },
+            "AdminTokenRefreshRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "refresh": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "refresh"
+                ]
+            },
+            "AdminTokenRefreshResponse": {
+                "type": "object",
+                "properties": {
+                    "access": {
+                        "type": "string"
+                    },
+                    "refresh": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "access"
+                ]
+            },
+            "ApplicationAdmin": {
+                "type": "object",
+                "description": "List/retrieve/update admin — nunca expone api_key.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "app_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 150
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "redirect_uris": {
+                        "description": "Whitelist exacta de URLs a las que se permite redirigir tras login."
+                    },
+                    "liveness_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento."
+                    },
+                    "match_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Distancia coseno máxima aceptada entre embedding capturado y almacenado."
+                    },
+                    "api_key_rotated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Última rotación de api_key (None = clave original de creación)."
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "users_count": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "api_key_rotated_at",
+                    "app_id",
+                    "created_at",
+                    "id",
+                    "name",
+                    "updated_at",
+                    "users_count"
+                ]
+            },
+            "ApplicationAdminCreateRequest": {
+                "type": "object",
+                "description": "Alta de tenant; la respuesta one-shot incluye api_key vía ApplicationCreatedSerializer.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 150
+                    },
+                    "redirect_uris": {
+                        "description": "Whitelist exacta de URLs a las que se permite redirigir tras login."
+                    },
+                    "liveness_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento."
+                    },
+                    "match_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Distancia coseno máxima aceptada entre embedding capturado y almacenado."
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "ApplicationCreated": {
+                "type": "object",
+                "description": "Respuesta de create: incluye api_key una sola vez.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "app_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "api_key": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Secreto de integración del tenant. Rotar con `rotate_api_key`."
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "redirect_uris": {
+                        "readOnly": true,
+                        "description": "Whitelist exacta de URLs a las que se permite redirigir tras login."
+                    },
+                    "liveness_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true,
+                        "description": "Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento."
+                    },
+                    "match_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true,
+                        "description": "Distancia coseno máxima aceptada entre embedding capturado y almacenado."
+                    },
+                    "api_key_rotated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Última rotación de api_key (None = clave original de creación)."
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "api_key",
+                    "api_key_rotated_at",
+                    "app_id",
+                    "created_at",
+                    "id",
+                    "is_active",
+                    "liveness_threshold",
+                    "match_threshold",
+                    "name",
+                    "redirect_uris",
+                    "updated_at"
+                ]
+            },
             "ApplicationPublic": {
                 "type": "object",
                 "description": "Respuesta pública de validación de tenant (sin api_key).",
@@ -493,6 +1632,84 @@
                     "match_threshold",
                     "name",
                     "redirect_uris"
+                ]
+            },
+            "ApplicationRotateApiKey": {
+                "type": "object",
+                "properties": {
+                    "app_id": {
+                        "type": "string"
+                    },
+                    "api_key": {
+                        "type": "string"
+                    },
+                    "api_key_rotated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "api_key",
+                    "api_key_rotated_at",
+                    "app_id"
+                ]
+            },
+            "BiometricProfileAdmin": {
+                "type": "object",
+                "description": "Sin vector embedding — solo metadatos operativos.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "user_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "app_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "model_version": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ModelVersionEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "liveness_score": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true,
+                        "description": "Score de anti-spoofing pasivo al momento del enrolamiento."
+                    },
+                    "quality_score": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "description": "Desactiva un embedding antiguo al re-enrolar sin perder histórico."
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "app_id",
+                    "created_at",
+                    "id",
+                    "liveness_score",
+                    "model_version",
+                    "quality_score",
+                    "user_id"
                 ]
             },
             "ErrorResponse": {
@@ -603,6 +1820,141 @@
                     "user_id"
                 ]
             },
+            "ModelVersionEnum": {
+                "enum": [
+                    "buffalo_s",
+                    "mobilefacenet"
+                ],
+                "type": "string",
+                "description": "* `buffalo_s` - InsightFace buffalo_s\n* `mobilefacenet` - MobileFaceNet"
+            },
+            "PaginatedApplicationAdminList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ApplicationAdmin"
+                        }
+                    }
+                }
+            },
+            "PaginatedTenantUserAdminList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TenantUserAdmin"
+                        }
+                    }
+                }
+            },
+            "PatchedApplicationAdminRequest": {
+                "type": "object",
+                "description": "List/retrieve/update admin — nunca expone api_key.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 150
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "redirect_uris": {
+                        "description": "Whitelist exacta de URLs a las que se permite redirigir tras login."
+                    },
+                    "liveness_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento."
+                    },
+                    "match_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Distancia coseno máxima aceptada entre embedding capturado y almacenado."
+                    }
+                }
+            },
+            "PatchedBiometricProfileAdminUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "is_active": {
+                        "type": "boolean",
+                        "description": "Desactiva un embedding antiguo al re-enrolar sin perder histórico."
+                    }
+                }
+            },
+            "PatchedTenantUserAdminUpdateRequest": {
+                "type": "object",
+                "description": "PATCH: perfil + activar/desactivar. No crea usuarios (alta = Flujo B).",
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "minLength": 1,
+                        "maxLength": 254
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 30
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "RegisterRequestRequest": {
                 "type": "object",
                 "properties": {
@@ -687,6 +2039,71 @@
                     "user_id"
                 ]
             },
+            "TenantUserAdmin": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "app_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 30
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "last_login_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "active_profiles_count": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "active_profiles_count",
+                    "app_id",
+                    "created_at",
+                    "email",
+                    "first_name",
+                    "id",
+                    "last_login_at",
+                    "last_name",
+                    "updated_at"
+                ]
+            },
             "TokenPair": {
                 "type": "object",
                 "properties": {
@@ -738,6 +2155,13 @@
                     "access"
                 ]
             }
+        },
+        "securitySchemes": {
+            "jwtAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
         }
     },
     "tags": [
@@ -748,6 +2172,10 @@
         {
             "name": "auth",
             "description": "Login / registro biométrico y refresh de tokens."
+        },
+        {
+            "name": "admin",
+            "description": "Panel de administración de plataforma (Fase 6). Requiere JWT de Django User con is_superuser=True."
         },
         {
             "name": "system",

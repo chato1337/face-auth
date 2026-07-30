@@ -1,6 +1,24 @@
 # Operaciones — Face-Auth
 
+## Panel de administración (preferido)
+
+UI SPA para operadores Django con `is_superuser=True`:
+
+1. Crear superuser (una vez):
+   ```bash
+   cd backend
+   pipenv run python manage.py createsuperuser
+   ```
+2. Abrir http://localhost:5173/admin/login
+3. Gestionar tenants, rotar `api_key`, activar/desactivar usuarios y perfiles biométricos.
+
+API bajo `/api/v1/admin/` (tag OpenAPI `admin`). Django Admin (`/admin/` del backend) y CLI siguen como escape hatch / automatización.
+
 ## Agregar un nuevo tenant
+
+**Preferido:** Panel → Applications → Nuevo tenant (la `api_key` se muestra una sola vez).
+
+CLI:
 
 ```bash
 cd backend
@@ -11,19 +29,21 @@ pipenv run python manage.py create_application \
   --match-threshold 0.42
 ```
 
-Guarda `app_id` y `api_key` en el gestor de secretos del cliente. El frontend abre:
+Guarda `app_id` y `api_key` en el gestor de secretos del cliente. El frontend SSO abre:
 
 `https://face-auth.example/login?app_id=<app_id>&redirect_uri=<uri_whitelisteada>`
 
-Alternativa: Django admin → Applications.
-
 ## Rotar `api_key`
+
+**Preferido:** Panel → Application → Rotar API key (plaintext one-shot).
+
+CLI:
 
 ```bash
 pipenv run python manage.py rotate_api_key --app-id app_XXX --yes
 ```
 
-La clave anterior queda inválida de inmediato. Entrega la nueva al cliente por canal seguro. También disponible como acción masiva en el admin.
+La clave anterior queda inválida de inmediato. Entrega la nueva al cliente por canal seguro.
 
 ## Rotar / actualizar modelos ONNX
 
