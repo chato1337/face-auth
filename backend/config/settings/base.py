@@ -109,7 +109,23 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ),
     "EXCEPTION_HANDLER": "core.exceptions.face_auth_exception_handler",
+    "DEFAULT_THROTTLE_RATES": {
+        # Login/registro biométrico: por app_id + IP (ver core.throttling).
+        "biometric_auth": env("BIOMETRIC_AUTH_THROTTLE", default="30/min"),
+    },
 }
+
+# Cache en memoria para throttling DRF (reemplazar por Redis en multi-worker prod).
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "faceauth-throttle",
+    }
+}
+
+# Videos ≤15 MB en memoria; no se escriben a MEDIA_ROOT.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Face-Auth API",

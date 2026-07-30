@@ -12,6 +12,7 @@ from apps.biometrics.exceptions import DuplicateBiometricError, NoMatchFoundErro
 from apps.biometrics.services.embeddings import FaceEmbedder
 from apps.biometrics.services.liveness_active import ActiveLivenessChecker
 from apps.biometrics.services.liveness_passive import PassiveLivenessClassifier
+from apps.biometrics.services.model_pool import ModelPool
 from apps.biometrics.services.preprocessing import FramePreprocessor
 from apps.biometrics.services.vector_matcher import VectorMatcher
 from apps.tenants.models import Application
@@ -53,10 +54,11 @@ class BiometricService:
         matcher: VectorMatcher | None = None,
     ):
         self.application = application
-        self._preprocessor = preprocessor or FramePreprocessor()
-        self._active_liveness = active_liveness or ActiveLivenessChecker()
-        self._passive_liveness = passive_liveness or PassiveLivenessClassifier()
-        self._embedder = embedder or FaceEmbedder()
+        # Por defecto reutiliza singletons de proceso (Fase 5 — pooling).
+        self._preprocessor = preprocessor or ModelPool.get_preprocessor()
+        self._active_liveness = active_liveness or ModelPool.get_active_liveness()
+        self._passive_liveness = passive_liveness or ModelPool.get_passive_liveness()
+        self._embedder = embedder or ModelPool.get_embedder()
         self._matcher = matcher or VectorMatcher(application=application)
 
     def process_enrollment(self, video_bytes: bytes) -> EnrollResult:

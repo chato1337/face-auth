@@ -22,6 +22,7 @@ Abrir con tenant válido, por ejemplo:
 | `bun run dev` | Servidor de desarrollo |
 | `bun run build` | Typecheck + build producción |
 | `bun run generate:api` | Regenera `src/api/generated/schema.d.ts` desde `backend/schema.json` |
+| `bun run test` | Vitest (CameraCapture, login/registro) |
 | `bun run lint` | Oxlint |
 
 Tras cambios en el contrato OpenAPI del backend:

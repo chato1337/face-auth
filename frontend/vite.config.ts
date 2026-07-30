@@ -2,7 +2,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
-import { defineConfig } from "vite"
+import { defineConfig } from "vitest/config"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -17,5 +17,11 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+  },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    css: true,
   },
 })

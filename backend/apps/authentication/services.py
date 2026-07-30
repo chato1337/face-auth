@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlencode, urlparse, urlunparse
 from uuid import uuid4
 
 from django.conf import settings
@@ -37,6 +38,10 @@ class SSORedirectToken(Token):
     lifetime = timedelta(minutes=2)
 
 
+class InvalidRedirectUriError(ValueError):
+    """La redirect_uri no está en la whitelist exacta del tenant."""
+
+
 def _base_claims(user: TenantUser) -> dict[str, Any]:
     return {
         "user_id": str(user.id),
@@ -44,6 +49,43 @@ def _base_claims(user: TenantUser) -> dict[str, Any]:
         "email": user.email,
         "jti": uuid4().hex,
     }
+
+
+def normalize_redirect_uri(uri: str) -> str:
+    """
+    Normaliza para comparación exacta (whitelist estricta, no por prefijo).
+    - Rechaza fragmentos (#...)
+    - Compara scheme/netloc/path/query literales tras strip
+    - No reescribe path ni query (evita que un prefijo más largo matchee)
+    """
+    raw = (uri or "").strip()
+    if not raw:
+        raise InvalidRedirectUriError("redirect_uri vacía.")
+    parsed = urlparse(raw)
+    if parsed.fragment:
+        raise InvalidRedirectUriError("redirect_uri no puede incluir fragmento (#).")
+    if parsed.scheme not in ("http", "https"):
+        raise InvalidRedirectUriError("redirect_uri debe usar http o https.")
+    if not parsed.netloc:
+        raise InvalidRedirectUriError("redirect_uri inválida (sin host).")
+    # Reconstruir canónico sin fragmento; path vacío → "/"
+    path = parsed.path if parsed.path else "/"
+    return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), path, "", parsed.query, ""))
+
+
+def is_allowed_redirect(application: Application, redirect_uri: str) -> bool:
+    allowed = application.redirect_uris or []
+    try:
+        candidate = normalize_redirect_uri(redirect_uri)
+    except InvalidRedirectUriError:
+        return False
+    for entry in allowed:
+        try:
+            if normalize_redirect_uri(str(entry)) == candidate:
+                return True
+        except InvalidRedirectUriError:
+            continue
+    return False
 
 
 @dataclass(frozen=True)
@@ -62,6 +104,7 @@ class AuthenticationService:
         user: TenantUser,
         *,
         redirect_uri: str | None = None,
+        require_allowed_redirect: bool = True,
     ) -> IssuedTokens:
         application = user.application
         claims = _base_claims(user)
@@ -78,7 +121,12 @@ class AuthenticationService:
         redirect["purpose"] = "sso_redirect"
         redirect["nonce"] = uuid4().hex
 
-        redirect_url = self._build_redirect_url(application, redirect_uri, str(redirect))
+        redirect_url = self._build_redirect_url(
+            application,
+            redirect_uri,
+            str(redirect),
+            require_allowed=require_allowed_redirect,
+        )
 
         user.last_login_at = datetime.now(timezone.utc)
         user.save(update_fields=["last_login_at", "updated_at"])
@@ -95,17 +143,31 @@ class AuthenticationService:
         application: Application,
         redirect_uri: str | None,
         token: str,
+        *,
+        require_allowed: bool = True,
     ) -> str | None:
         if not redirect_uri:
             return None
-        allowed = application.redirect_uris or []
-        if redirect_uri not in allowed:
+        if not is_allowed_redirect(application, redirect_uri):
+            if require_allowed:
+                raise InvalidRedirectUriError(
+                    "redirect_uri no está en la whitelist exacta de la Application."
+                )
             return None
-        separator = "&" if "?" in redirect_uri else "?"
-        return f"{redirect_uri}{separator}token={token}"
+        base = normalize_redirect_uri(redirect_uri)
+        parsed = urlparse(base)
+        # Añadir token sin permitir inyección vía query previa maliciosa del caller:
+        # usamos la URI ya normalizada y whitelistada.
+        query_items = []
+        if parsed.query:
+            query_items.append(parsed.query)
+        query_items.append(urlencode({"token": token}))
+        new_query = "&".join(query_items)
+        return urlunparse(
+            (parsed.scheme, parsed.netloc, parsed.path, "", new_query, "")
+        )
 
 
-# Compat: permitir RefreshToken estándar si se necesita en Fase 3
 def issue_simplejwt_style(user: TenantUser) -> dict[str, str]:
     """Helper opcional usando API familiar de simplejwt (claims custom)."""
     service = AuthenticationService()
@@ -117,5 +179,4 @@ def issue_simplejwt_style(user: TenantUser) -> dict[str, str]:
     }
 
 
-# Asegura que simplejwt use SECRET_KEY de Django (default).
 _ = settings.SECRET_KEY

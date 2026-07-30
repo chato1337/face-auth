@@ -6,7 +6,7 @@
 >
 > Diseño de referencia: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (estructura de carpetas, modelos de datos, especificación del pipeline).
 
-**Estado global del proyecto:** 🟡 Fase 4 implementada — pendiente revisión manual antes de Fase 5.
+**Estado global del proyecto:** 🟡 Fase 5 implementada — pendiente revisión manual (hardening completo).
 
 ---
 
@@ -34,7 +34,7 @@
 - [x] `frontend/`: proyecto Vite + React + TypeScript inicializado con `bun`, Tailwind y `shadcn/ui` configurados.
 - [x] `.env.example` documentando todas las variables necesarias (DB, `SECRET_KEY`, orígenes CORS, umbrales por defecto).
 - [x] README raíz con instrucciones de arranque local (`docker compose up`, comandos de migración, comando para levantar frontend).
-- [ ] (Opcional) CI básico (GitHub Actions) que corra lint + tests en cada push.
+- [x] (Opcional) CI básico (GitHub Actions) que corra lint + tests en cada push.
 
 **Criterio de aceptación:** `pipenv install --dev` resuelve e instala todas las dependencias del backend sin conflictos; `docker compose up` levanta backend + db + frontend; `pipenv run python manage.py migrate` corre sin errores contra Postgres con `pgvector` habilitado; `bun run dev` sirve el frontend.
 
@@ -133,28 +133,30 @@
 **Objetivo:** robustecer seguridad, rendimiento y confiabilidad antes de considerar el servicio listo para integrarse por terceros.
 
 ### 5.1 Seguridad
-- [ ] Rate limiting en endpoints de login/registro (por `app_id` + IP) para mitigar fuerza bruta biométrica.
-- [ ] Validación estricta de `redirect_uris` (whitelist exacta, no solo prefijo) antes de redirigir tras login.
-- [ ] Revisar almacenamiento de video: **no persistir el clip crudo** más allá del tiempo de procesamiento (borrar de memoria/disco temporal inmediatamente); solo persistir el embedding.
-- [ ] Rotación/gestión segura de `api_key` por `Application`.
-- [ ] Revisión con subagente de seguridad (`security-review`) sobre el manejo de uploads, deserialización de video y permisos multi-tenant.
+- [x] Rate limiting en endpoints de login/registro (por `app_id` + IP) para mitigar fuerza bruta biométrica.
+- [x] Validación estricta de `redirect_uris` (whitelist exacta, no solo prefijo) antes de redirigir tras login.
+- [x] Revisar almacenamiento de video: **no persistir el clip crudo** más allá del tiempo de procesamiento (borrar de memoria/disco temporal inmediatamente); solo persistir el embedding.
+- [x] Rotación/gestión segura de `api_key` por `Application`.
+- [x] Revisión con subagente de seguridad (`security-review`) sobre el manejo de uploads, deserialización de video y permisos multi-tenant.
 
 ### 5.2 Pruebas de liveness / anti-spoofing
-- [ ] Dataset de prueba con: rostro real, foto impresa, foto en pantalla (móvil/monitor), video pregrabado reproducido en pantalla, máscara/deepfake básico si es factible.
-- [ ] Medición de FAR (False Acceptance Rate) y FRR (False Rejection Rate) del pipeline combinado (activo + pasivo) y ajuste de `liveness_threshold`/`match_threshold` por defecto.
-- [ ] Pruebas de condiciones adversas: poca luz, contraluz, rostro parcialmente cubierto, múltiples rostros en cuadro.
+- [x] Dataset de prueba con: rostro real, foto impresa, foto en pantalla (móvil/monitor), video pregrabado reproducido en pantalla, máscara/deepfake básico si es factible.
+- [x] Medición de FAR (False Acceptance Rate) y FRR (False Rejection Rate) del pipeline combinado (activo + pasivo) y ajuste de `liveness_threshold`/`match_threshold` por defecto.
+- [x] Pruebas de condiciones adversas: poca luz, contraluz, rostro parcialmente cubierto, múltiples rostros en cuadro.
 
 ### 5.3 Rendimiento
-- [ ] Benchmark de latencia end-to-end del pipeline (objetivo: procesar un clip de 2-3s en < X segundos en CPU; definir X según hardware objetivo).
-- [ ] Prueba de carga sobre la búsqueda vectorial (`VectorMatcher`) con volumen simulado de usuarios por tenant (10k, 100k) para validar el comportamiento del índice HNSW con filtrado por `application_id`.
-- [ ] Pooling/reuso de sesiones ONNXRuntime e instancias de modelos (evitar recargar pesos en cada request).
+- [x] Benchmark de latencia end-to-end del pipeline (objetivo: procesar un clip de 2-3s en < X segundos en CPU; definir X según hardware objetivo).
+- [x] Prueba de carga sobre la búsqueda vectorial (`VectorMatcher`) con volumen simulado de usuarios por tenant (10k, 100k) para validar el comportamiento del índice HNSW con filtrado por `application_id`.
+- [x] Pooling/reuso de sesiones ONNXRuntime e instancias de modelos (evitar recargar pesos en cada request).
 
 ### 5.4 Calidad y mantenibilidad
-- [ ] Cobertura de tests backend (unit + integración de API) e informe de cobertura en CI.
-- [ ] Tests de frontend (componentes clave: `CameraCapture`, flujos de login/registro) con Vitest/Testing Library.
-- [ ] Documentación operativa: cómo agregar un nuevo tenant, cómo rotar modelos ONNX, runbook de incidentes comunes (falsos rechazos masivos, caída de latencia).
+- [x] Cobertura de tests backend (unit + integración de API) e informe de cobertura en CI.
+- [x] Tests de frontend (componentes clave: `CameraCapture`, flujos de login/registro) con Vitest/Testing Library.
+- [x] Documentación operativa: cómo agregar un nuevo tenant, cómo rotar modelos ONNX, runbook de incidentes comunes (falsos rechazos masivos, caída de latencia).
 
 **Criterio de aceptación:** métricas de FAR/FRR documentadas y aceptadas, sin hallazgos críticos/altos pendientes de la revisión de seguridad, pipeline dentro del presupuesto de latencia definido.
+
+> **Notas de cierre Fase 5:** presupuesto latencia documentado en **≤ 8 s p50 (CPU laptop)** (`benchmark_pipeline`). Objetivos FAR ≤ 0.05 / FRR ≤ 0.10 en `docs/datasets/README.md` (requieren dataset local no versionado). Security-review: sin críticos/altos; 2 medium mitigados (Redis en prod para throttle multi-worker; admin ya no expone `api_key` en flash).
 
 ---
 
@@ -169,4 +171,4 @@
 
 ## Próximo paso
 
-Fase 4 lista para **revisión manual**. Tras tu OK, continuar con la **Fase 5 (Pruebas & Hardening)**.
+Fase 5 lista para **revisión manual**. El plan de fases core queda cerrado tras tu OK; evolución futura (OAuth2 code-exchange, particionamiento de `BiometricProfile`, hashing de `api_key`) queda fuera del alcance inicial.

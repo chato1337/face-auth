@@ -111,7 +111,7 @@ export interface components {
             readonly app_id: string;
             readonly name: string;
             readonly is_active: boolean;
-            /** @description Whitelist de URLs a las que se permite redirigir tras un login exitoso. */
+            /** @description Whitelist exacta de URLs a las que se permite redirigir tras login. */
             readonly redirect_uris: unknown;
             /**
              * Format: double
@@ -270,7 +270,7 @@ export interface operations {
                     "application/json": components["schemas"]["LoginResponse"];
                 };
             };
-            /** @description Request inválido / app inactiva / video inválido */
+            /** @description Request inválido / app inactiva / video inválido / redirect inválida */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -306,6 +306,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Rate limit excedido (app_id + IP) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     v1_auth_register_create: {
@@ -330,7 +337,7 @@ export interface operations {
                     "application/json": components["schemas"]["RegisterResponse"];
                 };
             };
-            /** @description Request inválido / app inactiva / video inválido */
+            /** @description Request inválido / app inactiva / video inválido / redirect inválida */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -365,6 +372,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+            /** @description Rate limit excedido (app_id + IP) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

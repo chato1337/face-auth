@@ -107,11 +107,19 @@
                                             "field": "app_id"
                                         },
                                         "summary": "Application inactiva"
+                                    },
+                                    "RedirectURIInválida": {
+                                        "value": {
+                                            "code": "invalid_redirect_uri",
+                                            "message": "redirect_uri no está en la whitelist exacta de la Application.",
+                                            "field": "redirect_uri"
+                                        },
+                                        "summary": "Redirect URI inválida"
                                     }
                                 }
                             }
                         },
-                        "description": "Request inválido / app inactiva / video inválido"
+                        "description": "Request inválido / app inactiva / video inválido / redirect inválida"
                     },
                     "404": {
                         "content": {
@@ -168,6 +176,9 @@
                             }
                         },
                         "description": "Calidad / liveness / rostro"
+                    },
+                    "429": {
+                        "description": "Rate limit excedido (app_id + IP)"
                     },
                     "401": {
                         "content": {
@@ -251,11 +262,19 @@
                                             "field": "app_id"
                                         },
                                         "summary": "Application inactiva"
+                                    },
+                                    "RedirectURIInválida": {
+                                        "value": {
+                                            "code": "invalid_redirect_uri",
+                                            "message": "redirect_uri no está en la whitelist exacta de la Application.",
+                                            "field": "redirect_uri"
+                                        },
+                                        "summary": "Redirect URI inválida"
                                     }
                                 }
                             }
                         },
-                        "description": "Request inválido / app inactiva / video inválido"
+                        "description": "Request inválido / app inactiva / video inválido / redirect inválida"
                     },
                     "404": {
                         "content": {
@@ -312,6 +331,9 @@
                             }
                         },
                         "description": "Calidad / liveness / rostro"
+                    },
+                    "429": {
+                        "description": "Rate limit excedido (app_id + IP)"
                     },
                     "409": {
                         "content": {
@@ -449,7 +471,7 @@
                     },
                     "redirect_uris": {
                         "readOnly": true,
-                        "description": "Whitelist de URLs a las que se permite redirigir tras un login exitoso."
+                        "description": "Whitelist exacta de URLs a las que se permite redirigir tras login."
                     },
                     "liveness_threshold": {
                         "type": "number",

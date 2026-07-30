@@ -80,6 +80,16 @@ cd frontend && bun run generate:api
 
 Flujos A/B (login/registro) con captura de cámara, TanStack Query y tipos generados desde `backend/schema.json`. Ver [`frontend/README.md`](frontend/README.md).
 
+## Hardening — Fase 5
+
+- Rate limit login/registro (`BIOMETRIC_AUTH_THROTTLE`, en prod usar `REDIS_URL`)
+- Whitelist exacta de `redirect_uri`
+- Rotación de `api_key`: `pipenv run python manage.py rotate_api_key --app-id … --yes`
+- Pool de modelos ML (`ModelPool`)
+- Benchmarks: `benchmark_pipeline`, `benchmark_vector_search`, `evaluate_liveness`
+- Ops: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) · Datasets: [`docs/datasets/README.md`](docs/datasets/README.md)
+- CI: `.github/workflows/ci.yml` (lint + tests + coverage)
+
 ## API — Fase 3 (OpenAPI)
 
 | Método | Ruta | Descripción |

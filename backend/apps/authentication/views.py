@@ -21,10 +21,17 @@ from apps.authentication.serializers import (
     TokenRefreshRequestSerializer,
     TokenRefreshResponseSerializer,
 )
-from apps.authentication.services import AuthenticationService, TenantAccessToken, TenantRefreshToken
+from apps.authentication.services import (
+    AuthenticationService,
+    InvalidRedirectUriError,
+    TenantAccessToken,
+    TenantRefreshToken,
+    is_allowed_redirect,
+)
 from apps.biometrics.exceptions import BiometricPipelineError
 from apps.biometrics.services import BiometricService
 from apps.tenants.models import Application
+from core.throttling import AppIdScopedRateThrottle
 
 # ---------------------------------------------------------------------------
 # OpenAPI error examples (ARCHITECTURE §3.3)
@@ -103,6 +110,16 @@ EX_APP_INACTIVE = OpenApiExample(
     response_only=True,
     status_codes=["400"],
 )
+EX_INVALID_REDIRECT = OpenApiExample(
+    "Redirect URI inválida",
+    value={
+        "code": "invalid_redirect_uri",
+        "message": "redirect_uri no está en la whitelist exacta de la Application.",
+        "field": "redirect_uri",
+    },
+    response_only=True,
+    status_codes=["400"],
+)
 EX_INVALID_REFRESH = OpenApiExample(
     "Refresh inválido",
     value={"code": "invalid_token", "message": "Refresh token inválido o expirado.", "field": "refresh"},
@@ -113,8 +130,8 @@ EX_INVALID_REFRESH = OpenApiExample(
 ERROR_RESPONSES_COMMON = {
     400: OpenApiResponse(
         response=ErrorResponseSerializer,
-        description="Request inválido / app inactiva / video inválido",
-        examples=[EX_INVALID_VIDEO, EX_APP_INACTIVE],
+        description="Request inválido / app inactiva / video inválido / redirect inválida",
+        examples=[EX_INVALID_VIDEO, EX_APP_INACTIVE, EX_INVALID_REDIRECT],
     ),
     404: OpenApiResponse(
         response=ErrorResponseSerializer,
@@ -125,6 +142,9 @@ ERROR_RESPONSES_COMMON = {
         response=ErrorResponseSerializer,
         description="Calidad / liveness / rostro",
         examples=[EX_LOW_QUALITY, EX_SPOOF, EX_FACE_NOT_FOUND],
+    ),
+    429: OpenApiResponse(
+        description="Rate limit excedido (app_id + IP)",
     ),
 }
 
@@ -149,6 +169,22 @@ def _read_video_bytes(uploaded) -> bytes:
     return uploaded.read()
 
 
+def _reject_invalid_redirect(application: Application, redirect_uri: str | None) -> Response | None:
+    """Whitelist exacta: si el cliente envía redirect_uri, debe coincidir 1:1 (normalizada)."""
+    if not redirect_uri:
+        return None
+    if is_allowed_redirect(application, redirect_uri):
+        return None
+    return Response(
+        {
+            "code": "invalid_redirect_uri",
+            "message": "redirect_uri no está en la whitelist exacta de la Application.",
+            "field": "redirect_uri",
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
 def _tokens_payload(issued) -> dict:
     return {
         "access": issued.access,
@@ -171,6 +207,7 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
     parser_classes = [MultiPartParser, FormParser]
+    throttle_classes = [AppIdScopedRateThrottle]
 
     @extend_schema(
         tags=["auth"],
@@ -199,36 +236,55 @@ class LoginView(APIView):
         if isinstance(application, Response):
             return application
 
-        video_bytes = _read_video_bytes(data["video"])
-        service = BiometricService(application)
-        try:
-            result = service.process_authentication(video_bytes)
-        except BiometricPipelineError:
-            raise
+        rejected = _reject_invalid_redirect(application, data.get("redirect_uri"))
+        if rejected is not None:
+            return rejected
 
-        user = result.matched_user
-        assert user is not None
-        issued = AuthenticationService().issue_for_user(
-            user,
-            redirect_uri=data.get("redirect_uri"),
-        )
-        return Response(
-            {
-                "user_id": user.id,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "distance": result.distance,
-                "liveness": _liveness_payload(result.liveness),
-                "tokens": _tokens_payload(issued),
-            }
-        )
+        video_bytes = _read_video_bytes(data["video"])
+        try:
+            service = BiometricService(application)
+            try:
+                result = service.process_authentication(video_bytes)
+            except BiometricPipelineError:
+                raise
+
+            user = result.matched_user
+            assert user is not None
+            try:
+                issued = AuthenticationService().issue_for_user(
+                    user,
+                    redirect_uri=data.get("redirect_uri"),
+                )
+            except InvalidRedirectUriError:
+                return Response(
+                    {
+                        "code": "invalid_redirect_uri",
+                        "message": "redirect_uri no está en la whitelist exacta de la Application.",
+                        "field": "redirect_uri",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "distance": result.distance,
+                    "liveness": _liveness_payload(result.liveness),
+                    "tokens": _tokens_payload(issued),
+                }
+            )
+        finally:
+            # No persistir el clip crudo más allá del procesamiento.
+            del video_bytes
 
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
     parser_classes = [MultiPartParser, FormParser]
+    throttle_classes = [AppIdScopedRateThrottle]
 
     @extend_schema(
         tags=["auth"],
@@ -257,6 +313,10 @@ class RegisterView(APIView):
         if isinstance(application, Response):
             return application
 
+        rejected = _reject_invalid_redirect(application, data.get("redirect_uri"))
+        if rejected is not None:
+            return rejected
+
         if TenantUser.objects.filter(application=application, email__iexact=data["email"]).exists():
             return Response(
                 {
@@ -268,45 +328,58 @@ class RegisterView(APIView):
             )
 
         video_bytes = _read_video_bytes(data["video"])
-        service = BiometricService(application)
-        enroll = service.process_enrollment(video_bytes)
-
         try:
-            with transaction.atomic():
-                user = TenantUser.objects.create(
-                    application=application,
-                    first_name=data["first_name"],
-                    last_name=data["last_name"],
-                    email=data["email"],
-                    phone=data.get("phone") or "",
+            service = BiometricService(application)
+            enroll = service.process_enrollment(video_bytes)
+
+            try:
+                with transaction.atomic():
+                    user = TenantUser.objects.create(
+                        application=application,
+                        first_name=data["first_name"],
+                        last_name=data["last_name"],
+                        email=data["email"],
+                        phone=data.get("phone") or "",
+                    )
+                    service.persist_enrollment(user, enroll)
+            except IntegrityError:
+                return Response(
+                    {
+                        "code": "email_taken",
+                        "message": "Ya existe un usuario con este email en la aplicación.",
+                        "field": "email",
+                    },
+                    status=status.HTTP_409_CONFLICT,
                 )
-                service.persist_enrollment(user, enroll)
-        except IntegrityError:
+
+            try:
+                issued = AuthenticationService().issue_for_user(
+                    user,
+                    redirect_uri=data.get("redirect_uri"),
+                )
+            except InvalidRedirectUriError:
+                return Response(
+                    {
+                        "code": "invalid_redirect_uri",
+                        "message": "redirect_uri no está en la whitelist exacta de la Application.",
+                        "field": "redirect_uri",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return Response(
                 {
-                    "code": "email_taken",
-                    "message": "Ya existe un usuario con este email en la aplicación.",
-                    "field": "email",
+                    "user_id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "liveness": _liveness_payload(enroll.liveness),
+                    "quality_score": enroll.quality_score,
+                    "tokens": _tokens_payload(issued),
                 },
-                status=status.HTTP_409_CONFLICT,
+                status=status.HTTP_201_CREATED,
             )
-
-        issued = AuthenticationService().issue_for_user(
-            user,
-            redirect_uri=data.get("redirect_uri"),
-        )
-        return Response(
-            {
-                "user_id": user.id,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "liveness": _liveness_payload(enroll.liveness),
-                "quality_score": enroll.quality_score,
-                "tokens": _tokens_payload(issued),
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        finally:
+            del video_bytes
 
 
 class TokenRefreshView(APIView):

@@ -27,6 +27,10 @@ class FramePreprocessor:
     """
     Decodifica video bytes → frames muestreados + metadata de calidad.
     Acepta mp4/webm (y lo que OpenCV pueda abrir vía archivo temporal).
+
+    El clip crudo NUNCA se persiste: se escribe a NamedTemporaryFile(delete=True)
+    solo durante la decodificación y se elimina al salir del context manager.
+    Solo el embedding (vía BiometricService.persist_enrollment) llega a la BD.
     """
 
     MIN_FPS = 8.0
