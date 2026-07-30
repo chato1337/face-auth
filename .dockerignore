@@ -1,0 +1,6 @@
+# Face-Auth root ignore for docker context (if ever built from root)
+.git/
+**/.venv/
+**/node_modules/
+**/dist/
+**/.env

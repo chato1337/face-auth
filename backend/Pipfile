@@ -1,0 +1,41 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[requires]
+python_version = "3.11"
+
+# ---------------------------------------------------------------------------
+# Dependencias de runtime (equivalentes a lo antes planeado en
+# requirements/base.txt + requirements/biometrics.txt). Todo lo que va aquí
+# se instala tanto en desarrollo como en producción (`pipenv install --deploy`).
+# ---------------------------------------------------------------------------
+[packages]
+django = ">=5.0,<5.1"
+djangorestframework = "*"
+djangorestframework-simplejwt = "*"
+drf-spectacular = "*"
+django-environ = "*"
+django-cors-headers = "*"
+psycopg = {extras = ["binary"], version = "*"}
+pgvector = "*"
+gunicorn = "*"
+
+# Pipeline biométrico
+opencv-python-headless = "*"
+mediapipe = "*"
+onnxruntime = "*"
+insightface = "*"
+numpy = "<2.0"
+
+[dev-packages]
+pytest = "*"
+pytest-django = "*"
+pytest-cov = "*"
+factory-boy = "*"
+ruff = "*"
+black = "*"
+mypy = "*"
+django-stubs = "*"
+ipython = "*"
