@@ -1,6 +1,6 @@
 # Face-Auth — Documento de Arquitectura
 
-> Estado: **Fase 1 (infra) implementada — pendiente revisión manual antes de Fase 2.**
+> Estado: **Fase 2 (backend core & biometría) implementada — pendiente revisión manual antes de Fase 3.**
 > Este documento es la fuente de verdad sobre la estructura y el diseño de datos del sistema. Debe mantenerse actualizado a medida que el proyecto evoluciona. Ver [`MASTER_PLAN.md`](../MASTER_PLAN.md) para el plan de ejecución por fases.
 
 ## 1. Estructura del Monorepo
@@ -316,7 +316,7 @@ class BiometricProfile(models.Model):
 | # | Módulo | Librería | Entrada | Salida | Falla rápido si... |
 |---|--------|----------|---------|--------|---------------------|
 | 1 | `preprocessing.FramePreprocessor` | OpenCV | bytes de video | `list[np.ndarray]` (frames muestreados) + metadata (fps, resolución, brillo medio) | video corrupto, < N fps, resolución insuficiente, brillo fuera de rango, rostro no detectado en el encuadre |
-| 2 | `liveness_active.ActiveLivenessChecker` | MediaPipe Face Mesh | frames + landmarks por frame | `bool` + `ActiveLivenessMetrics` (EAR mínimo/parpadeos detectados, delta de yaw/pitch) | no hay parpadeo detectado, cabeza completamente estática (posible foto/pantalla) |
+| 2 | `liveness_active.ActiveLivenessChecker` | MediaPipe Face Landmarker (Tasks API) | frames + landmarks por frame | `bool` + `ActiveLivenessMetrics` (EAR mínimo/parpadeos detectados, delta de yaw/pitch) | no hay parpadeo detectado, cabeza completamente estática (posible foto/pantalla) |
 | 3 | `liveness_passive.PassiveLivenessClassifier` | ONNXRuntime + MiniFASNetV2 | 1-3 frames clave (crop de rostro) | score de "real" por frame + score agregado | score agregado < `application.liveness_threshold` |
 | 4 | `embeddings.FaceEmbedder` | InsightFace (`buffalo_s`) | mejor frame (el de mayor nitidez/score) | vector `float32[512]` normalizado (L2) | no se puede alinear/extraer el rostro con confianza suficiente |
 | 5 | `vector_matcher.VectorMatcher` | pgvector (Django ORM) | embedding + `application` | `TenantUser` candidato + distancia coseno, o `None` | distancia > `application.match_threshold` (solo aplica en login) |

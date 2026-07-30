@@ -43,6 +43,7 @@ backend/apps/biometrics/ml_models/**
 *.pth
 *.pt
 *.pkl
+*.task
 buffalo_*/
 .insightface/
 

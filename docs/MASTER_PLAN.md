@@ -6,7 +6,7 @@
 >
 > Diseño de referencia: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (estructura de carpetas, modelos de datos, especificación del pipeline).
 
-**Estado global del proyecto:** 🟡 Fase 1 implementada — pendiente revisión manual antes de Fase 2.
+**Estado global del proyecto:** 🟡 Fase 2 implementada — pendiente revisión manual antes de Fase 3.
 
 ---
 
@@ -47,29 +47,29 @@
 **Objetivo:** modelos persistidos, pipeline biométrico funcional de punta a punta (probado vía script/test, aún sin exponer HTTP), autenticación JWT emitida internamente.
 
 ### 2.1 Modelos y multi-tenancy
-- [ ] Crear app `apps/tenants` con el modelo `Application` (ver `docs/ARCHITECTURE.md §2.1`) + admin registrado + migración inicial.
-- [ ] Crear app `apps/accounts` con `TenantUser` y `BiometricProfile` (ver `docs/ARCHITECTURE.md §2.2`) + migraciones (incluyendo el índice HNSW).
-- [ ] Middleware `core/middleware.py`: resuelve `app_id` (query param o header `X-App-Id`, a definir) → `request.application`; responde 404/400 si no existe o está inactiva.
-- [ ] Permission `core/permissions.py::HasValidAppId` reutilizable en todas las vistas.
-- [ ] Comando de management `create_application` (o vía Django admin) para dar de alta tenants de prueba.
+- [x] Crear app `apps/tenants` con el modelo `Application` (ver `docs/ARCHITECTURE.md §2.1`) + admin registrado + migración inicial.
+- [x] Crear app `apps/accounts` con `TenantUser` y `BiometricProfile` (ver `docs/ARCHITECTURE.md §2.2`) + migraciones (incluyendo el índice HNSW).
+- [x] Middleware `core/middleware.py`: resuelve `app_id` (prioridad: header `X-App-Id`, luego query `?app_id=`) → `request.application`; responde 404/400 si no existe o está inactiva.
+- [x] Permission `core/permissions.py::HasValidAppId` reutilizable en todas las vistas.
+- [x] Comando de management `create_application` (o vía Django admin) para dar de alta tenants de prueba.
 
 ### 2.2 Pipeline biométrico (aislado, testeable sin HTTP)
-- [ ] `preprocessing.FramePreprocessor`: extracción de frames con OpenCV, validación de fps/resolución/brillo/duración.
-- [ ] `liveness_active.ActiveLivenessChecker`: landmarks con MediaPipe Face Mesh, cálculo de EAR (parpadeo) y variación de yaw/pitch/roll entre frames.
-- [ ] `liveness_passive.PassiveLivenessClassifier`: carga de modelo ONNX MiniFASNetV2, inferencia sobre frames clave, agregación de score.
-- [ ] Script/documentación de descarga de pesos (`buffalo_s` de InsightFace, `MiniFASNetV2.onnx`) fuera del control de versiones, con checksum.
-- [ ] `embeddings.FaceEmbedder`: carga de InsightFace `buffalo_s`, extracción y normalización L2 del embedding de 512-d.
-- [ ] `vector_matcher.VectorMatcher`: búsqueda por distancia coseno con pgvector, filtrado estricto por `application`, top-1 + umbral.
-- [ ] `biometric_service.BiometricService`: orquestador con `process_enrollment()` y `process_authentication()` (ver contrato en `docs/ARCHITECTURE.md §3.2`).
-- [ ] Excepciones tipadas (`apps/biometrics/exceptions.py`) para cada punto de falla del pipeline.
-- [ ] Suite de tests unitarios del pipeline usando clips de video fixture (real, foto estática, pantalla LCD, poca luz) — sin pasar por HTTP.
+- [x] `preprocessing.FramePreprocessor`: extracción de frames con OpenCV, validación de fps/resolución/brillo/duración.
+- [x] `liveness_active.ActiveLivenessChecker`: landmarks con MediaPipe **Face Landmarker (Tasks API, mediapipe≥1.0)**, cálculo de EAR (parpadeo) y variación de yaw/pitch/roll entre frames.
+- [x] `liveness_passive.PassiveLivenessClassifier`: carga de modelo ONNX MiniFASNetV2, inferencia sobre frames clave, agregación de score.
+- [x] Script/documentación de descarga de pesos (`download_ml_models`: Face Landmarker `.task`, `buffalo_s` InsightFace, `MiniFASNetV2.onnx`) fuera del control de versiones, con checksum.
+- [x] `embeddings.FaceEmbedder`: carga de InsightFace `buffalo_s`, extracción y normalización L2 del embedding de 512-d.
+- [x] `vector_matcher.VectorMatcher`: búsqueda por distancia coseno con pgvector, filtrado estricto por `application`, top-1 + umbral.
+- [x] `biometric_service.BiometricService`: orquestador con `process_enrollment()` y `process_authentication()` (ver contrato en `docs/ARCHITECTURE.md §3.2`).
+- [x] Excepciones tipadas (`apps/biometrics/exceptions.py`) para cada punto de falla del pipeline.
+- [x] Suite de tests unitarios del pipeline usando clips sintéticos + fakes de modelos (real E2E con videos vía `demo_biometric_flow`) — sin pasar por HTTP.
 
 ### 2.3 Autenticación / emisión de tokens
-- [ ] Configurar `django-simplejwt` para emitir tokens propios del servicio (no ligados al `User` de Django, sino a `TenantUser`); definir claims custom (`app_id`, `user_id`).
-- [ ] Definir el mecanismo de "authorization code" o token de redirección hacia la app cliente tras un login exitoso (a decidir: JWT firmado de un solo uso vs. code exchange estilo OAuth2).
-- [ ] Servicio `apps/authentication/services.py` que emite el token/código dado un `TenantUser` autenticado.
+- [x] Configurar `djangorestframework-simplejwt` para emitir tokens propios del servicio (no ligados al `User` de Django, sino a `TenantUser`); claims custom (`app_id`, `user_id`, `email`).
+- [x] Mecanismo de redirección SSO: **JWT firmado de un solo uso** (`purpose=sso_redirect`, TTL ~2 min) + access/refresh de sesión. Code-exchange OAuth2 queda como evolución futura.
+- [x] Servicio `apps/authentication/services.py` que emite el token/código dado un `TenantUser` autenticado.
 
-**Criterio de aceptación:** un script de management (`manage.py shell` o comando dedicado) puede registrar un usuario con un video de prueba, extraer y guardar su embedding, y luego autenticar con un segundo video del mismo usuario obteniendo un match exitoso; un video de una foto estática es rechazado por liveness.
+**Criterio de aceptación:** un script de management (`demo_biometric_flow`) puede registrar un usuario con un video de prueba, extraer y guardar su embedding, y luego autenticar con un segundo video del mismo usuario obteniendo un match exitoso; un video de una foto estática es rechazado por liveness. Cubierto además por tests unitarios con fakes (`pytest tests/unit/test_biometric_pipeline.py`).
 
 ---
 
@@ -160,13 +160,13 @@
 
 ## Registro de decisiones pendientes (a resolver antes/durante Fase 2-3)
 
-- [ ] Mecanismo exacto de "authorization code" para el SSO (JWT de un solo uso vs. code-exchange estilo OAuth2) — impacta `apps/authentication`.
-- [ ] Formato/códec exacto del video aceptado desde el frontend (webm/mp4, límites de tamaño) — impacta `videoRecorder.ts` y `FramePreprocessor`.
-- [ ] Política exacta de qué campo identifica duplicados en registro además del biométrico (¿solo email, o también teléfono?) — impacta `TenantUser` constraints.
+- [x] Mecanismo exacto de "authorization code" para el SSO → **JWT de un solo uso** (`SSORedirectToken`, `purpose=sso_redirect`) + access/refresh. OAuth2 code-exchange como evolución.
+- [x] Formato/códec del video → mp4/webm vía OpenCV; máx. 15 MB; duración 1–6 s; resolución mín. 320×240 (ajustable en `FramePreprocessor`).
+- [x] Duplicados en registro → unicidad de **email por `application`** (+ detección biométrica `DuplicateBiometricError`). Teléfono no es clave única por ahora.
 - [ ] Estrategia de particionamiento de `BiometricProfile` si un tenant supera cierto volumen (ver nota en `docs/ARCHITECTURE.md §2.2`).
 
 ---
 
 ## Próximo paso
 
-Fase 1 lista para **revisión manual**. Tras tu OK, continuar con la **Fase 2 (Backend Core & Biometría)**.
+Fase 2 lista para **revisión manual**. Tras tu OK, continuar con la **Fase 3 (OpenAPI & Contratos)**.

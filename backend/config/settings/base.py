@@ -1,6 +1,7 @@
 """
 Django settings base — compartidos entre entornos.
 """
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -51,6 +52,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.ApplicationResolverMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -113,6 +115,13 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Servicio de autenticación biométrica SSO multi-tenant.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "SIGNING_KEY": SECRET_KEY,
+    "ALGORITHM": "HS256",
 }
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
