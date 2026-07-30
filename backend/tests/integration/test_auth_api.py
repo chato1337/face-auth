@@ -208,6 +208,113 @@ class TestTokenRefresh:
 
 
 @pytest.mark.django_db
+class TestTokenVerify:
+    VERIFY_URL = "/api/v1/auth/token/verify/"
+
+    @pytest.fixture
+    def user(self, application):
+        return TenantUser.objects.create(
+            application=application,
+            first_name="Ada",
+            last_name="Lovelace",
+            email="ada@example.com",
+        )
+
+    def _verify(self, api, application, token, api_key=None):
+        return api.post(
+            self.VERIFY_URL,
+            {"app_id": application.app_id, "token": token},
+            format="json",
+            HTTP_X_API_KEY=api_key if api_key is not None else application.api_key,
+        )
+
+    def test_verify_ok_and_single_use(self, api, application, user):
+        issued = AuthenticationService().issue_for_user(user)
+
+        res = self._verify(api, application, issued.redirect_token)
+        assert res.status_code == 200, res.data
+        assert res.data["valid"] is True
+        assert str(res.data["user_id"]) == str(user.id)
+        assert res.data["email"] == user.email
+        assert res.data["app_id"] == application.app_id
+
+        # Replay: el mismo token no puede verificarse dos veces.
+        res2 = self._verify(api, application, issued.redirect_token)
+        assert res2.status_code == 401
+        assert res2.data["code"] == "token_already_used"
+
+    def test_verify_wrong_api_key(self, api, application, user):
+        issued = AuthenticationService().issue_for_user(user)
+        res = self._verify(api, application, issued.redirect_token, api_key="wrong-key")
+        assert res.status_code == 401
+        assert res.data["code"] == "invalid_api_key"
+
+    def test_verify_missing_api_key(self, api, application, user):
+        issued = AuthenticationService().issue_for_user(user)
+        res = api.post(
+            self.VERIFY_URL,
+            {"app_id": application.app_id, "token": issued.redirect_token},
+            format="json",
+        )
+        assert res.status_code == 401
+        assert res.data["code"] == "invalid_api_key"
+
+    def test_verify_rejects_access_token(self, api, application, user):
+        """Un access token no sirve como token de callback (token_type distinto)."""
+        issued = AuthenticationService().issue_for_user(user)
+        res = self._verify(api, application, issued.access)
+        assert res.status_code == 401
+        assert res.data["code"] == "invalid_token"
+
+    def test_verify_rejects_token_of_other_tenant(self, api, application, user):
+        other = Application.objects.create(name="Other", redirect_uris=[])
+        issued = AuthenticationService().issue_for_user(user)
+        res = self._verify(api, other, issued.redirect_token, api_key=other.api_key)
+        assert res.status_code == 401
+        assert res.data["code"] == "invalid_token"
+
+    def test_verify_expired_token(self, api, application, user):
+        from datetime import timedelta
+        from uuid import uuid4
+
+        from rest_framework_simplejwt.utils import aware_utcnow, datetime_to_epoch
+
+        from apps.authentication.services import SSORedirectToken
+
+        token = SSORedirectToken()
+        token["user_id"] = str(user.id)
+        token["app_id"] = application.app_id
+        token["email"] = user.email
+        token["jti"] = uuid4().hex
+        token["purpose"] = "sso_redirect"
+        token.payload["exp"] = datetime_to_epoch(aware_utcnow() - timedelta(minutes=1))
+
+        res = self._verify(api, application, str(token))
+        assert res.status_code == 401
+        assert res.data["code"] == "invalid_token"
+
+    def test_verify_inactive_user(self, api, application, user):
+        issued = AuthenticationService().issue_for_user(user)
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+
+        res = self._verify(api, application, issued.redirect_token)
+        assert res.status_code == 401
+        assert res.data["code"] == "user_inactive"
+
+    def test_verify_app_not_found(self, api, application, user):
+        issued = AuthenticationService().issue_for_user(user)
+        res = api.post(
+            self.VERIFY_URL,
+            {"app_id": "app_nope", "token": issued.redirect_token},
+            format="json",
+            HTTP_X_API_KEY=application.api_key,
+        )
+        assert res.status_code == 404
+        assert res.data["code"] == "app_not_found"
+
+
+@pytest.mark.django_db
 class TestDocsAndHealth:
     def test_health(self, api):
         assert api.get("/api/v1/health/").status_code == 200

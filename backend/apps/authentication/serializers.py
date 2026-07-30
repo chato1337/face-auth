@@ -61,6 +61,25 @@ class RegisterResponseSerializer(serializers.Serializer):
     tokens = TokenPairSerializer()
 
 
+class TokenVerifyRequestSerializer(serializers.Serializer):
+    app_id = serializers.CharField(help_text="Identificador del tenant que verifica.")
+    token = serializers.CharField(
+        help_text="redirect_token (purpose=sso_redirect) recibido en el callback SSO.",
+    )
+
+
+class TokenVerifyResponseSerializer(serializers.Serializer):
+    valid = serializers.BooleanField()
+    user_id = serializers.UUIDField()
+    app_id = serializers.CharField()
+    email = serializers.EmailField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    expires_at = serializers.DateTimeField(
+        help_text="Expiración del token verificado (el consumo ya quedó registrado).",
+    )
+
+
 class TokenRefreshRequestSerializer(serializers.Serializer):
     refresh = serializers.CharField()
 

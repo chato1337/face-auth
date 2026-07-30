@@ -21,6 +21,16 @@ vi.mock("@/context/TenantContext", () => ({
   }),
 }))
 
+// Evita que DashcamCapture descargue el WASM/modelo de MediaPipe en jsdom.
+vi.mock("@/components/camera/useFaceLandmarker", () => ({
+  useFaceLandmarker: () => ({
+    landmarker: null,
+    status: "loading",
+    error: null,
+    retry: vi.fn(),
+  }),
+}))
+
 function renderRegister() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -44,7 +54,11 @@ describe("RegisterPage", () => {
     await user.type(screen.getByLabelText(/correo/i), "ada@example.com")
     await user.click(screen.getByRole("button", { name: /registro biométrico/i }))
 
-    expect(await screen.findByRole("button", { name: /activar cámara/i })).toBeInTheDocument()
+    // En jsdom no hay getUserMedia: la captura automática muestra el error
+    // de cámara, pero el flujo permite cancelar y volver al formulario.
+    expect(
+      await screen.findByText(/no soporta acceso a la cámara/i),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: /cancelar/i }))
 

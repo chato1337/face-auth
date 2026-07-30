@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2 } from "lucide-react"
 
 import { useLogin } from "@/api/hooks/useLogin"
 import { ApiError } from "@/api/client"
-import { CameraCapture } from "@/components/camera/CameraCapture"
+import { DashcamCapture } from "@/components/camera/DashcamCapture"
 import { AuthNavLink, AuthShell } from "@/components/layout/AuthShell"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -90,7 +90,9 @@ export function LoginPage() {
           </p>
         </div>
       ) : cameraOpen ? (
-        <CameraCapture
+        // Si el backend rechaza el intento, la mutación termina, esta rama se
+        // vuelve a renderizar y DashcamCapture reinicia la detección sola.
+        <DashcamCapture
           onCapture={(blob) => void onCapture(blob)}
           onCancel={() => setCameraOpen(false)}
           disabled={login.isPending}
@@ -109,7 +111,8 @@ export function LoginPage() {
             Iniciar sesión con rostro
           </Button>
           <p className="text-center text-xs text-zinc-500">
-            Se grabará un clip corto (~2.5 s). Parpadea con naturalidad.
+            La cámara se enciende, detecta tu rostro y captura sola cuando
+            parpadees. Sin botones.
           </p>
         </div>
       )}

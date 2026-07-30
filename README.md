@@ -2,7 +2,7 @@
 
 Servicio de autenticación biométrica SSO multi-tenant.
 
-> Diseño: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Plan: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)
+> Diseño: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Plan: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) · Integración de apps cliente: [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md)
 
 ## Requisitos
 
@@ -106,6 +106,7 @@ Flujos A/B (login/registro) con captura de cámara, TanStack Query y tipos gener
 | POST | `/api/v1/auth/login/` | Login biométrico (`multipart`: `app_id`, `video`, `redirect_uri?`) |
 | POST | `/api/v1/auth/register/` | Registro biométrico (`multipart`: datos + `video`) |
 | POST | `/api/v1/auth/token/refresh/` | Refrescar access token |
+| POST | `/api/v1/auth/token/verify/` | Verificar token SSO del callback (server-to-server, `X-Api-Key`) |
 | GET | `/api/docs/` | Swagger UI |
 | GET | `/api/redoc/` | Redoc |
 | GET | `/api/schema/` | Schema OpenAPI crudo |

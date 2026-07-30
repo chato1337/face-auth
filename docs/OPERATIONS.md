@@ -33,6 +33,8 @@ Guarda `app_id` y `api_key` en el gestor de secretos del cliente. El frontend SS
 
 `https://face-auth.example/login?app_id=<app_id>&redirect_uri=<uri_whitelisteada>`
 
+Entrega al equipo del cliente la guía [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) (flujo SSO, validación del token en su callback, API directa y códigos de error).
+
 ## Rotar `api_key`
 
 **Preferido:** Panel → Application → Rotar API key (plaintext one-shot).

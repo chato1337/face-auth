@@ -261,6 +261,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/token/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verificar token de redirección SSO (server-to-server)
+         * @description La app cliente valida en su backend el `token` recibido en el callback. Requiere la `api_key` del tenant en el header `X-Api-Key`. El token es de un solo uso: la primera verificación exitosa lo consume.
+         */
+        post: operations["v1_auth_token_verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health/": {
         parameters: {
             query?: never;
@@ -590,6 +610,27 @@ export interface components {
             access: string;
             /** @description Presente si se rota el refresh. */
             refresh?: string;
+        };
+        TokenVerifyRequestRequest: {
+            /** @description Identificador del tenant que verifica. */
+            app_id: string;
+            /** @description redirect_token (purpose=sso_redirect) recibido en el callback SSO. */
+            token: string;
+        };
+        TokenVerifyResponse: {
+            valid: boolean;
+            /** Format: uuid */
+            user_id: string;
+            app_id: string;
+            /** Format: email */
+            email: string;
+            first_name: string;
+            last_name: string;
+            /**
+             * Format: date-time
+             * @description Expiración del token verificado (el consumo ya quedó registrado).
+             */
+            expires_at: string;
         };
     };
     responses: never;
@@ -1227,6 +1268,67 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+        };
+    };
+    v1_auth_token_verify_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description api_key del tenant (server-to-server; nunca exponer en el navegador). */
+                "X-Api-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenVerifyRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TokenVerifyRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenVerifyResponse"];
+                };
+            };
+            /** @description Application inactiva */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description api_key o token inválidos / token ya usado / usuario inactivo */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Application no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limit excedido (app_id + IP) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

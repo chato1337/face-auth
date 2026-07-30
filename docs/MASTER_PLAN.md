@@ -6,7 +6,7 @@
 >
 > Diseño de referencia: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (estructura de carpetas, modelos de datos, especificación del pipeline).
 
-**Estado global del proyecto:** 🟡 Fase 6 implementada — pendiente revisión manual del panel admin.
+**Estado global del proyecto:** 🟡 Fases 6 y 7 implementadas — pendiente revisión manual del panel admin y prueba manual del flujo dashcam con cámara real.
 
 ---
 
@@ -208,6 +208,51 @@
 
 ---
 
+## Fase 7 — Captura pasiva "Dashcam" (frontend)
+
+**Objetivo:** reemplazar el botón manual de "Grabar" por captura pasiva disparada por parpadeo (ver [`docs/dashcam-feat.md`](dashcam-feat.md)). MediaPipe en el cliente actúa **solo** como trigger de UX; el backend sigue haciendo la validación biométrica real (Zero-Trust, sin cambios de contrato).
+
+### 7.1 Piezas base
+- [x] Dependencia `@mediapipe/tasks-vision` (WASM vía CDN pinneado; modelo `.task` oficial de Google).
+- [x] `src/components/camera/faceMetrics.ts`: cálculo de EAR sobre landmarks (con corrección de aspect ratio) + `createBlinkDetector` (máquina de estados con histéresis y filtro de jitter) + tests unitarios (`faceMetrics.test.ts`).
+- [x] `src/components/camera/useFaceLandmarker.ts`: hook que inicializa Face Landmarker (runningMode `VIDEO`, 1 rostro, sin blendshapes) como singleton de sesión, con fallback GPU→CPU y `retry()`.
+- [x] `src/components/camera/useDashcamRecorder.ts`: hook cámara + `MediaRecorder` con **segmentos rotativos** (rota cada 4 s, espera mínimo 2 s al cortar) para que el clip final quede siempre en 2–4 s (dentro del rango 1–6 s del backend) e incluya el parpadeo.
+
+### 7.2 Integración
+- [x] `evaluateFaceAlignment` en `faceMetrics.ts`: bounding box de los landmarks centrada y a buena distancia (rangos tolerantes; el encuadre fino lo valida el backend) con hints de UI (`off_center`/`too_far`/`too_close`).
+- [x] Componente `DashcamCapture`: loop de `requestAnimationFrame` con `detectForVideo`, rostro alineado estable (6 frames) arma la grabación, estados de UI ("Rostro detectado. Parpadee para confirmar"), parpadeo dispara `stopAndCollect` y auto-envío del Blob; si el rostro se pierde 12 frames se desarma y vuelve a detectar.
+- [x] Reemplazo de `CameraCapture` por `DashcamCapture` en `LoginPage` y `RegisterPage` (mutaciones `useLogin`/`useRegister` intactas, sin cambios de contrato). `CameraCapture` se conserva como fallback manual.
+- [x] Manejo de rechazo del backend: la página muestra la alerta con el motivo y, al terminar la mutación, `DashcamCapture` se re-monta y reinicia la detección sin recargar la página (el formulario de registro no se resetea; email duplicado sigue regresando al formulario).
+- [x] Tests de componente (Vitest/Testing Library) con fakes de MediaPipe (`detectForVideo` con guion de frames) y `MediaRecorder`: error de cámara, carga del detector y flujo completo alineación → parpadeo → captura → cámara apagada.
+- [x] Code-splitting: `@mediapipe/tasks-vision` se importa dinámicamente (chunk lazy de ~153 kB; el bundle principal no crece para el panel admin ni la carga inicial).
+
+**Criterio de aceptación:** login y registro completan el flujo sin presionar "Grabar": la cámara enciende, detecta rostro alineado, el parpadeo dispara el corte y el video se envía solo; un rechazo del backend reinicia la detección automáticamente.
+
+> **Notas de cierre Fase 7 (conclusiones de implementación):**
+> - **Trigger en cliente, validación en servidor:** MediaPipe en el navegador decide únicamente *cuándo* cortar el clip (conveniencia UX). El contrato Zero-Trust no cambió: el backend sigue validando liveness activo/pasivo, embedding y matching sobre el video recibido.
+> - **Duración del clip:** como un Blob de `MediaRecorder` no se puede recortar de forma fiable en el cliente, `useDashcamRecorder` graba en **segmentos rotativos** (rota cada 4 s, espera mínimo 2 s al cortar) → clips siempre de 2–4 s, dentro del rango 1–6 s de `FramePreprocessor`. Caso borde conocido: si el parpadeo cae justo en la rotación de segmento, el clip puede no contener el ciclo completo y el backend lo rechazará por liveness; el flujo se reinicia solo, por lo que el costo es un reintento.
+> - **Parpadeo:** EAR clásico (índices 33/133/160/144/158/153 y 362/263/385/380/387/373 de la malla de 478 puntos) con corrección de aspect ratio, e histéresis 0.20/0.25 + mínimo 2 frames cerrados para filtrar jitter. El detector dispara al **reabrir** los ojos para que el clip contenga el ciclo completo (lo que busca `ActiveLivenessChecker`).
+> - **Rendimiento:** una inferencia síncrona por frame pintado vía `requestAnimationFrame` (sin Web Worker; el Face Landmarker corre en WASM/GPU y las pruebas no mostraron bloqueo del hilo). El landmarker es un **singleton de sesión** (no se paga re-init en cada reintento) con fallback GPU→CPU y assets desde CDN pinneado a la versión instalada.
+> - **Pendiente de verificación manual (requiere cámara real):** calibración de umbrales de EAR/alineación con distintos rostros/luz, y comportamiento en Safari/iOS (códecs de `MediaRecorder`). Los umbrales viven como opciones en `faceMetrics.ts`/`DashcamCapture.tsx` para ajustarse sin refactor.
+
+---
+
+## Fase 8 — Verificación server-to-server de tokens SSO
+
+**Objetivo:** cerrar la brecha de la guía de integración ([`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)): las apps cliente no podían verificar la firma del `redirect_token` (HS256 con clave del servicio, sin JWKS). Ahora la `api_key` del tenant tiene uso real en el flujo público.
+
+- [x] `POST /api/v1/auth/token/verify/` (`apps/authentication/views.py::TokenVerifyView`): body JSON `{app_id, token}` + header `X-Api-Key` (comparación en tiempo constante con `secrets.compare_digest`).
+- [x] Validaciones: firma/expiración/`token_type` (vía `SSORedirectToken`), `purpose == sso_redirect`, `app_id` del token == tenant que verifica, usuario existente y activo.
+- [x] **Consumo de un solo uso:** el `jti` se registra con `cache.add` atómico (TTL 5 min > TTL del token); replay → `401 token_already_used`. En prod multi-worker requiere el cache Redis ya previsto en `prod.py`.
+- [x] Respuesta con datos del usuario (`user_id`, `email`, nombres, `expires_at`) para que el cliente no necesite otra llamada.
+- [x] Rate limiting reutilizando `AppIdScopedRateThrottle` + errores nuevos (`invalid_api_key`, `token_already_used`, `user_inactive`) documentados con ejemplos OpenAPI; `schema.json` regenerado sin warnings y tipos TS del frontend re-generados.
+- [x] Tests de integración (8): éxito + replay, api_key incorrecta/ausente, access token rechazado, token de otro tenant, token expirado, usuario inactivo, app inexistente.
+- [x] `INTEGRATION_GUIDE.md` §3.3 actualizada: el cliente ya no implementa anti-replay propio; code-exchange OAuth2 sigue como evolución futura.
+
+**Criterio de aceptación:** una app cliente puede validar el `token` de su callback con una sola llamada autenticada por `api_key`; el mismo token verificado dos veces devuelve 401; un access/refresh token o un token de otro tenant se rechaza.
+
+---
+
 ## Registro de decisiones pendientes (a resolver antes/durante Fase 2-3)
 
 - [x] Mecanismo exacto de "authorization code" para el SSO → **JWT de un solo uso** (`SSORedirectToken`, `purpose=sso_redirect`) + access/refresh. OAuth2 code-exchange como evolución.
@@ -220,4 +265,4 @@
 
 ## Próximo paso
 
-Fase 6 lista para **revisión manual** del panel (`/admin/login` + API `/api/v1/admin/`). Evolución a roles queda fuera de v1.
+Fase 7 (captura pasiva "Dashcam") implementada end-to-end en el frontend; falta **prueba manual con cámara real** (calibración de umbrales EAR/alineación y Safari/iOS). Fase 6 sigue pendiente de revisión manual del panel (`/admin/login` + API `/api/v1/admin/`).

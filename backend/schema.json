@@ -1284,6 +1284,144 @@
                 }
             }
         },
+        "/api/v1/auth/token/verify/": {
+            "post": {
+                "operationId": "v1_auth_token_verify_create",
+                "description": "La app cliente valida en su backend el `token` recibido en el callback. Requiere la `api_key` del tenant en el header `X-Api-Key`. El token es de un solo uso: la primera verificación exitosa lo consume.",
+                "summary": "Verificar token de redirección SSO (server-to-server)",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-Api-Key",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "api_key del tenant (server-to-server; nunca exponer en el navegador).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenVerifyRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenVerifyRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenVerifyResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationInactiva": {
+                                        "value": {
+                                            "code": "app_inactive",
+                                            "message": "Application inactiva.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application inactiva"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Application inactiva"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "APIKeyInválida": {
+                                        "value": {
+                                            "code": "invalid_api_key",
+                                            "message": "X-Api-Key ausente o incorrecta.",
+                                            "field": null
+                                        },
+                                        "summary": "API key inválida"
+                                    },
+                                    "TokenSSOInválido": {
+                                        "value": {
+                                            "code": "invalid_token",
+                                            "message": "Token inválido, expirado o de otro tenant.",
+                                            "field": "token"
+                                        },
+                                        "summary": "Token SSO inválido"
+                                    },
+                                    "TokenYaConsumido": {
+                                        "value": {
+                                            "code": "token_already_used",
+                                            "message": "El token ya fue verificado (un solo uso).",
+                                            "field": "token"
+                                        },
+                                        "summary": "Token ya consumido"
+                                    },
+                                    "UsuarioInactivo": {
+                                        "value": {
+                                            "code": "user_inactive",
+                                            "message": "El usuario está desactivado en esta aplicación.",
+                                            "field": "token"
+                                        },
+                                        "summary": "Usuario inactivo"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "api_key o token inválidos / token ya usado / usuario inactivo"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Application no encontrada"
+                    },
+                    "429": {
+                        "description": "Rate limit excedido (app_id + IP)"
+                    }
+                }
+            }
+        },
         "/api/v1/health/": {
             "get": {
                 "operationId": "v1_health_retrieve",
@@ -2153,6 +2291,64 @@
                 },
                 "required": [
                     "access"
+                ]
+            },
+            "TokenVerifyRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "app_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Identificador del tenant que verifica."
+                    },
+                    "token": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "redirect_token (purpose=sso_redirect) recibido en el callback SSO."
+                    }
+                },
+                "required": [
+                    "app_id",
+                    "token"
+                ]
+            },
+            "TokenVerifyResponse": {
+                "type": "object",
+                "properties": {
+                    "valid": {
+                        "type": "boolean"
+                    },
+                    "user_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "app_id": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "first_name": {
+                        "type": "string"
+                    },
+                    "last_name": {
+                        "type": "string"
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Expiración del token verificado (el consumo ya quedó registrado)."
+                    }
+                },
+                "required": [
+                    "app_id",
+                    "email",
+                    "expires_at",
+                    "first_name",
+                    "last_name",
+                    "user_id",
+                    "valid"
                 ]
             }
         },

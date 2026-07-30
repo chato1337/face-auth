@@ -6,7 +6,7 @@ import { AlertCircle, CheckCircle2 } from "lucide-react"
 
 import { ApiError } from "@/api/client"
 import { useRegister } from "@/api/hooks/useRegister"
-import { CameraCapture } from "@/components/camera/CameraCapture"
+import { DashcamCapture } from "@/components/camera/DashcamCapture"
 import { AuthNavLink, AuthShell } from "@/components/layout/AuthShell"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -136,7 +136,10 @@ export function RegisterPage() {
           </p>
         </div>
       ) : step === "camera" ? (
-        <CameraCapture
+        // Ante un rechazo del backend (salvo email duplicado), se vuelve a
+        // esta rama y DashcamCapture reinicia la detección automáticamente,
+        // conservando los datos del formulario.
+        <DashcamCapture
           onCapture={(blob) => void onCapture(blob)}
           onCancel={() => setStep("form")}
           disabled={registerMutation.isPending}

@@ -110,8 +110,12 @@ face-auth/
         ├── components/
         │   ├── ui/                 # primitivos shadcn/ui
         │   ├── camera/
-        │   │   ├── CameraCapture.tsx
-        │   │   └── videoRecorder.ts # MediaRecorder wrapper (clip 2-3s, códec, límites)
+        │   │   ├── CameraCapture.tsx   # captura manual (fallback; ya no se usa en Login/Registro)
+        │   │   ├── DashcamCapture.tsx  # captura pasiva: rostro alineado + parpadeo → auto-envío (Fase 7)
+        │   │   ├── videoRecorder.ts    # utilidades MediaRecorder/getUserMedia (códec, límites, errores)
+        │   │   ├── faceMetrics.ts      # EAR, detector de parpadeo y alineación (lógica pura, testeada)
+        │   │   ├── useFaceLandmarker.ts   # MediaPipe Face Landmarker (WASM, singleton, GPU→CPU)
+        │   │   └── useDashcamRecorder.ts  # cámara + MediaRecorder con segmentos rotativos (clips 2-4s)
         │   └── layout/
         │       ├── AuthShell.tsx   # shell SSO
         │       └── AdminShell.tsx  # shell panel operadores

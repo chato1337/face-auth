@@ -1,15 +1,20 @@
 """
-Vistas de autenticación biométrica (login / register / token refresh).
+Vistas de autenticación biométrica (login / register / token refresh / token verify).
 """
 from __future__ import annotations
 
+import secrets
+from datetime import datetime, timezone as dt_timezone
+
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
-from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
 
 from apps.accounts.models import TenantUser
 from apps.authentication.serializers import (
@@ -20,10 +25,13 @@ from apps.authentication.serializers import (
     RegisterResponseSerializer,
     TokenRefreshRequestSerializer,
     TokenRefreshResponseSerializer,
+    TokenVerifyRequestSerializer,
+    TokenVerifyResponseSerializer,
 )
 from apps.authentication.services import (
     AuthenticationService,
     InvalidRedirectUriError,
+    SSORedirectToken,
     TenantAccessToken,
     TenantRefreshToken,
     is_allowed_redirect,
@@ -123,6 +131,30 @@ EX_INVALID_REDIRECT = OpenApiExample(
 EX_INVALID_REFRESH = OpenApiExample(
     "Refresh inválido",
     value={"code": "invalid_token", "message": "Refresh token inválido o expirado.", "field": "refresh"},
+    response_only=True,
+    status_codes=["401"],
+)
+EX_INVALID_API_KEY = OpenApiExample(
+    "API key inválida",
+    value={"code": "invalid_api_key", "message": "X-Api-Key ausente o incorrecta.", "field": None},
+    response_only=True,
+    status_codes=["401"],
+)
+EX_INVALID_SSO_TOKEN = OpenApiExample(
+    "Token SSO inválido",
+    value={"code": "invalid_token", "message": "Token inválido, expirado o de otro tenant.", "field": "token"},
+    response_only=True,
+    status_codes=["401"],
+)
+EX_TOKEN_ALREADY_USED = OpenApiExample(
+    "Token ya consumido",
+    value={"code": "token_already_used", "message": "El token ya fue verificado (un solo uso).", "field": "token"},
+    response_only=True,
+    status_codes=["401"],
+)
+EX_USER_INACTIVE = OpenApiExample(
+    "Usuario inactivo",
+    value={"code": "user_inactive", "message": "El usuario está desactivado en esta aplicación.", "field": "token"},
     response_only=True,
     status_codes=["401"],
 )
@@ -424,3 +456,144 @@ class TokenRefreshView(APIView):
                 access[claim] = refresh[claim]
 
         return Response({"access": str(access), "refresh": str(refresh)})
+
+
+# TTL del registro anti-replay: mayor que la vida del SSORedirectToken (2 min).
+SSO_JTI_CACHE_TTL_SECONDS = 5 * 60
+
+
+def _invalid_sso_token_response() -> Response:
+    return Response(
+        {
+            "code": "invalid_token",
+            "message": "Token inválido, expirado o de otro tenant.",
+            "field": "token",
+        },
+        status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+class TokenVerifyView(APIView):
+    """
+    Verificación server-to-server del `redirect_token` que la app cliente
+    recibe en su callback SSO (`?token=...`). Autenticada con la `api_key`
+    del tenant (header `X-Api-Key`). Consumo de un solo uso: el `jti` se
+    registra en cache y una segunda verificación del mismo token falla.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    parser_classes = [JSONParser, FormParser]
+    throttle_classes = [AppIdScopedRateThrottle]
+
+    @extend_schema(
+        tags=["auth"],
+        summary="Verificar token de redirección SSO (server-to-server)",
+        description=(
+            "La app cliente valida en su backend el `token` recibido en el callback. "
+            "Requiere la `api_key` del tenant en el header `X-Api-Key`. "
+            "El token es de un solo uso: la primera verificación exitosa lo consume."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="X-Api-Key",
+                type=str,
+                location=OpenApiParameter.HEADER,
+                required=True,
+                description="api_key del tenant (server-to-server; nunca exponer en el navegador).",
+            ),
+        ],
+        request=TokenVerifyRequestSerializer,
+        responses={
+            200: TokenVerifyResponseSerializer,
+            400: OpenApiResponse(
+                response=ErrorResponseSerializer,
+                description="Application inactiva",
+                examples=[EX_APP_INACTIVE],
+            ),
+            401: OpenApiResponse(
+                response=ErrorResponseSerializer,
+                description="api_key o token inválidos / token ya usado / usuario inactivo",
+                examples=[
+                    EX_INVALID_API_KEY,
+                    EX_INVALID_SSO_TOKEN,
+                    EX_TOKEN_ALREADY_USED,
+                    EX_USER_INACTIVE,
+                ],
+            ),
+            404: OpenApiResponse(
+                response=ErrorResponseSerializer,
+                description="Application no encontrada",
+                examples=[EX_APP_NOT_FOUND],
+            ),
+            429: OpenApiResponse(description="Rate limit excedido (app_id + IP)"),
+        },
+    )
+    def post(self, request):
+        serializer = TokenVerifyRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        application = _resolve_application(data["app_id"])
+        if isinstance(application, Response):
+            return application
+
+        provided_key = request.headers.get("X-Api-Key") or ""
+        if not secrets.compare_digest(application.api_key, provided_key):
+            return Response(
+                {"code": "invalid_api_key", "message": "X-Api-Key ausente o incorrecta.", "field": None},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        try:
+            # Valida firma, expiración y token_type == "sso_redirect".
+            token = SSORedirectToken(data["token"])
+        except TokenError:
+            return _invalid_sso_token_response()
+
+        payload = token.payload
+        if payload.get("purpose") != "sso_redirect" or payload.get("app_id") != application.app_id:
+            return _invalid_sso_token_response()
+
+        jti = payload.get("jti")
+        if not jti:
+            return _invalid_sso_token_response()
+
+        try:
+            user = TenantUser.objects.get(id=payload.get("user_id"), application=application)
+        except (TenantUser.DoesNotExist, ValueError, TypeError):
+            return _invalid_sso_token_response()
+
+        if not user.is_active:
+            return Response(
+                {
+                    "code": "user_inactive",
+                    "message": "El usuario está desactivado en esta aplicación.",
+                    "field": "token",
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Consumo atómico de un solo uso: cache.add falla si el jti ya existe.
+        if not cache.add(f"sso_redirect_used:{jti}", True, timeout=SSO_JTI_CACHE_TTL_SECONDS):
+            return Response(
+                {
+                    "code": "token_already_used",
+                    "message": "El token ya fue verificado (un solo uso).",
+                    "field": "token",
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        expires_at = datetime.fromtimestamp(payload["exp"], tz=dt_timezone.utc)
+        return Response(
+            {
+                "valid": True,
+                "user_id": user.id,
+                "app_id": application.app_id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "expires_at": expires_at,
+            }
+        )
