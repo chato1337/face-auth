@@ -108,13 +108,24 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    "EXCEPTION_HANDLER": "core.exceptions.face_auth_exception_handler",
 }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Face-Auth API",
-    "DESCRIPTION": "Servicio de autenticación biométrica SSO multi-tenant.",
+    "DESCRIPTION": (
+        "Servicio de autenticación biométrica SSO multi-tenant.\n\n"
+        "Errores del pipeline biométrico usan el payload uniforme "
+        "`{code, message, field}` (ver códigos en ARCHITECTURE §3.3)."
+    ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "TAGS": [
+        {"name": "tenants", "description": "Validación pública de Applications."},
+        {"name": "auth", "description": "Login / registro biométrico y refresh de tokens."},
+        {"name": "system", "description": "Health y utilidades."},
+    ],
 }
 
 SIMPLE_JWT = {

@@ -61,7 +61,31 @@ bun run dev
 - La extensión `pgvector` se habilita automáticamente en la primera migración (`apps/tenants/migrations/0001_enable_pgvector.py`).
 - **MediaPipe ≥ 1.0** ya no expone `mp.solutions` (Face Mesh clásico). El liveness activo usa **Face Landmarker (Tasks API)**; el archivo `face_landmarker.task` se descarga con verificación SHA-256.
 - **MiniFASNetV2.onnx** puede requerir colocación manual si las URLs de descarga fallan. En ese caso usa `--mock-passive` en `demo_biometric_flow` para probar enroll/auth sin el clasificador pasivo.
-- Aún **no hay endpoints HTTP** del pipeline biométrico; eso llega en la Fase 3 (OpenAPI & contratos). Hasta entonces se valida vía management commands y tests unitarios.
+- Errores del pipeline HTTP usan el payload uniforme `{code, message, field}` (ver `docs/ARCHITECTURE.md` §3.3).
+
+## API — Fase 3 (OpenAPI)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/v1/applications/{app_id}/` | Validar tenant (público) |
+| POST | `/api/v1/auth/login/` | Login biométrico (`multipart`: `app_id`, `video`, `redirect_uri?`) |
+| POST | `/api/v1/auth/register/` | Registro biométrico (`multipart`: datos + `video`) |
+| POST | `/api/v1/auth/token/refresh/` | Refrescar access token |
+| GET | `/api/docs/` | Swagger UI |
+| GET | `/api/redoc/` | Redoc |
+| GET | `/api/schema/` | Schema OpenAPI crudo |
+
+```bash
+cd backend
+pipenv run python manage.py runserver 0.0.0.0:8000
+# Abrir http://localhost:8000/api/docs/
+
+# Regenerar contrato (sin warnings):
+pipenv run python manage.py spectacular --file schema.json --format openapi-json --fail-on-warn --validate
+
+# Tests de contrato/API
+pipenv run pytest tests/integration/test_auth_api.py -v
+```
 
 ## Backend — Fase 2 (biometría)
 

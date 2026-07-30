@@ -2,7 +2,12 @@
 Middleware multi-tenant: resuelve Application desde header X-App-Id o query ?app_id=.
 
 Prioridad: header X-App-Id > query param app_id.
-Rutas bajo /api/ requieren app_id válido (salvo paths públicos explícitos).
+
+Rutas públicas (no exigen Application en middleware; las vistas resuelven app_id
+desde path o body multipart cuando aplica):
+  - docs / schema / health
+  - GET applications/{app_id}/
+  - POST auth/login|register|token/refresh
 """
 from __future__ import annotations
 
@@ -10,11 +15,13 @@ from django.http import JsonResponse
 
 from apps.tenants.models import Application
 
-# Paths de API que no exigen Application resuelta (docs, health, schema).
 PUBLIC_API_PREFIXES = (
     "/api/docs",
+    "/api/redoc",
     "/api/schema",
     "/api/v1/health",
+    "/api/v1/applications/",
+    "/api/v1/auth/",
 )
 
 

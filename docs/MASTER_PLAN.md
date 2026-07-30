@@ -6,7 +6,7 @@
 >
 > Diseño de referencia: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (estructura de carpetas, modelos de datos, especificación del pipeline).
 
-**Estado global del proyecto:** 🟡 Fase 2 implementada — pendiente revisión manual antes de Fase 3.
+**Estado global del proyecto:** 🟡 Fase 3 implementada — pendiente revisión manual antes de Fase 4.
 
 ---
 
@@ -77,16 +77,16 @@
 
 **Objetivo:** exponer el pipeline vía API REST completamente documentada y auto-descriptiva, siguiendo metodología contract-first.
 
-- [ ] Instalar y configurar `drf-spectacular` (`SPECTACULAR_SETTINGS`, `SchemaView` en `config/urls.py`).
-- [ ] Endpoints de `apps/tenants`: `GET /api/v1/applications/{app_id}/` (validación pública de existencia, para el frontend antes de cualquier flujo).
-- [ ] Endpoints de `apps/authentication` / `apps/biometrics`:
-  - [ ] `POST /api/v1/auth/login/` (`multipart/form-data`: `app_id` + `video`) → `AuthResult` serializado (token/redirect_url o error descriptivo).
-  - [ ] `POST /api/v1/auth/register/` (`multipart/form-data`: datos de texto + `video`) → usuario creado + token, o error descriptivo sin romper el formulario.
-  - [ ] `POST /api/v1/auth/token/refresh/` (si aplica, vía `simplejwt`).
-- [ ] Serializers de request/response con `@extend_schema` y ejemplos (`OpenApiExample`) para cada código de error (400/401/409/422).
-- [ ] Exception handler uniforme (`core/exceptions.py`) que mapea las excepciones del pipeline a un payload de error consistente (`{code, message, field}`).
-- [ ] Generar `backend/schema.json` (`python manage.py spectacular --file schema.json`) y servir Swagger UI / Redoc en `/api/docs/`.
-- [ ] Validar el schema generado (`drf-spectacular` `--fail-on-warn` en CI).
+- [x] Instalar y configurar `drf-spectacular` (`SPECTACULAR_SETTINGS`, `SchemaView` en `config/urls.py`).
+- [x] Endpoints de `apps/tenants`: `GET /api/v1/applications/{app_id}/` (validación pública de existencia, para el frontend antes de cualquier flujo).
+- [x] Endpoints de `apps/authentication` / `apps/biometrics`:
+  - [x] `POST /api/v1/auth/login/` (`multipart/form-data`: `app_id` + `video`) → `AuthResult` serializado (token/redirect_url o error descriptivo).
+  - [x] `POST /api/v1/auth/register/` (`multipart/form-data`: datos de texto + `video`) → usuario creado + token, o error descriptivo sin romper el formulario.
+  - [x] `POST /api/v1/auth/token/refresh/` (vía tokens propios `TenantRefreshToken`).
+- [x] Serializers de request/response con `@extend_schema` y ejemplos (`OpenApiExample`) para cada código de error (400/401/409/422).
+- [x] Exception handler uniforme (`core/exceptions.py`) que mapea las excepciones del pipeline a un payload de error consistente (`{code, message, field}`).
+- [x] Generar `backend/schema.json` (`python manage.py spectacular --file schema.json --format openapi-json`) y servir Swagger UI / Redoc en `/api/docs/` y `/api/redoc/`.
+- [x] Validar el schema generado (`drf-spectacular --fail-on-warn --validate`).
 
 **Criterio de aceptación:** `schema.json` se genera sin warnings; Swagger UI permite ejecutar manualmente `login`/`register` subiendo un video; el contrato cubre todos los códigos de error documentados en `docs/ARCHITECTURE.md §3.3`.
 
@@ -169,4 +169,4 @@
 
 ## Próximo paso
 
-Fase 2 lista para **revisión manual**. Tras tu OK, continuar con la **Fase 3 (OpenAPI & Contratos)**.
+Fase 3 lista para **revisión manual**. Tras tu OK, continuar con la **Fase 4 (Frontend)**.

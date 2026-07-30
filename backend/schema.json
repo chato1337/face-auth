@@ -1,0 +1,735 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Face-Auth API",
+        "version": "1.0.0",
+        "description": "Servicio de autenticación biométrica SSO multi-tenant.\n\nErrores del pipeline biométrico usan el payload uniforme `{code, message, field}` (ver códigos en ARCHITECTURE §3.3)."
+    },
+    "paths": {
+        "/api/v1/applications/{app_id}/": {
+            "get": {
+                "operationId": "v1_applications_retrieve",
+                "description": "Validación pública de existencia de Application para el frontend\nantes de iniciar login/registro. No requiere header X-App-Id.",
+                "summary": "Obtener Application por app_id",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "app_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Identificador público del tenant (ej. app_xxxxx).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "tenants"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApplicationPublic"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "Application inactiva"
+                    },
+                    "404": {
+                        "description": "No encontrada"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/login/": {
+            "post": {
+                "operationId": "v1_auth_login_create",
+                "description": "Flujo A: procesa el video, valida liveness y busca match en el tenant. Éxito → tokens + redirect_url opcional.",
+                "summary": "Login biométrico",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoginResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "VideoInválido": {
+                                        "value": {
+                                            "code": "invalid_video",
+                                            "message": "No se pudo abrir el video.",
+                                            "field": "video"
+                                        },
+                                        "summary": "Video inválido"
+                                    },
+                                    "ApplicationInactiva": {
+                                        "value": {
+                                            "code": "app_inactive",
+                                            "message": "Application inactiva.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application inactiva"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Request inválido / app inactiva / video inválido"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Application no encontrada"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "CapturaDeBajaCalidad": {
+                                        "value": {
+                                            "code": "low_quality_capture",
+                                            "message": "Iluminación insuficiente. Mejora la luz del entorno.",
+                                            "field": "video"
+                                        },
+                                        "summary": "Captura de baja calidad"
+                                    },
+                                    "Spoof/LivenessFallido": {
+                                        "value": {
+                                            "code": "spoof_detected",
+                                            "message": "Liveness activo fallido: no se detectó parpadeo",
+                                            "field": "video"
+                                        },
+                                        "summary": "Spoof / liveness fallido"
+                                    },
+                                    "RostroNoEncontrado": {
+                                        "value": {
+                                            "code": "face_not_found",
+                                            "message": "No se detectó un rostro de forma consistente en el clip.",
+                                            "field": "video"
+                                        },
+                                        "summary": "Rostro no encontrado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Calidad / liveness / rostro"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "SinCoincidencia": {
+                                        "value": {
+                                            "code": "no_match",
+                                            "message": "No se encontró coincidencia biométrica.",
+                                            "field": "video"
+                                        },
+                                        "summary": "Sin coincidencia"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Sin match biométrico"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/register/": {
+            "post": {
+                "operationId": "v1_auth_register_create",
+                "description": "Flujo B: valida liveness, extrae embedding y crea TenantUser. En error el cliente debe conservar el formulario y solo reintentar el video.",
+                "summary": "Registro biométrico",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RegisterResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "VideoInválido": {
+                                        "value": {
+                                            "code": "invalid_video",
+                                            "message": "No se pudo abrir el video.",
+                                            "field": "video"
+                                        },
+                                        "summary": "Video inválido"
+                                    },
+                                    "ApplicationInactiva": {
+                                        "value": {
+                                            "code": "app_inactive",
+                                            "message": "Application inactiva.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application inactiva"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Request inválido / app inactiva / video inválido"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Application no encontrada"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "CapturaDeBajaCalidad": {
+                                        "value": {
+                                            "code": "low_quality_capture",
+                                            "message": "Iluminación insuficiente. Mejora la luz del entorno.",
+                                            "field": "video"
+                                        },
+                                        "summary": "Captura de baja calidad"
+                                    },
+                                    "Spoof/LivenessFallido": {
+                                        "value": {
+                                            "code": "spoof_detected",
+                                            "message": "Liveness activo fallido: no se detectó parpadeo",
+                                            "field": "video"
+                                        },
+                                        "summary": "Spoof / liveness fallido"
+                                    },
+                                    "RostroNoEncontrado": {
+                                        "value": {
+                                            "code": "face_not_found",
+                                            "message": "No se detectó un rostro de forma consistente en el clip.",
+                                            "field": "video"
+                                        },
+                                        "summary": "Rostro no encontrado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Calidad / liveness / rostro"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "BiometríaDuplicada": {
+                                        "value": {
+                                            "code": "duplicate_biometric",
+                                            "message": "Este rostro ya está registrado en esta aplicación.",
+                                            "field": "video"
+                                        },
+                                        "summary": "Biometría duplicada"
+                                    },
+                                    "EmailDuplicado": {
+                                        "value": {
+                                            "code": "email_taken",
+                                            "message": "Ya existe un usuario con este email en la aplicación.",
+                                            "field": "email"
+                                        },
+                                        "summary": "Email duplicado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Email o biometría duplicada"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/token/refresh/": {
+            "post": {
+                "operationId": "v1_auth_token_refresh_create",
+                "description": "Refresh de access token usando TenantRefreshToken (no User de Django).",
+                "summary": "Refrescar access token",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefreshRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefreshRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenRefreshResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "RefreshInválido": {
+                                        "value": {
+                                            "code": "invalid_token",
+                                            "message": "Refresh token inválido o expirado.",
+                                            "field": "refresh"
+                                        },
+                                        "summary": "Refresh inválido"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Refresh inválido"
+                    }
+                }
+            }
+        },
+        "/api/v1/health/": {
+            "get": {
+                "operationId": "v1_health_retrieve",
+                "summary": "Health check",
+                "tags": [
+                    "system"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ApplicationPublic": {
+                "type": "object",
+                "description": "Respuesta pública de validación de tenant (sin api_key).",
+                "properties": {
+                    "app_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "redirect_uris": {
+                        "readOnly": true,
+                        "description": "Whitelist de URLs a las que se permite redirigir tras un login exitoso."
+                    },
+                    "liveness_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true,
+                        "description": "Score mínimo (0-1) del modelo de liveness pasivo para aceptar el intento."
+                    },
+                    "match_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true,
+                        "description": "Distancia coseno máxima aceptada entre embedding capturado y almacenado."
+                    }
+                },
+                "required": [
+                    "app_id",
+                    "is_active",
+                    "liveness_threshold",
+                    "match_threshold",
+                    "name",
+                    "redirect_uris"
+                ]
+            },
+            "ErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "field": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "message"
+                ]
+            },
+            "LivenessReport": {
+                "type": "object",
+                "properties": {
+                    "passed": {
+                        "type": "boolean"
+                    },
+                    "active_score": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "passive_score": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "active_score",
+                    "passed",
+                    "passive_score"
+                ]
+            },
+            "LoginRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "app_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Identificador del tenant."
+                    },
+                    "video": {
+                        "type": "string",
+                        "format": "binary",
+                        "description": "Clip biométrico (mp4/webm, 1–6 s)."
+                    },
+                    "redirect_uri": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true,
+                        "minLength": 1,
+                        "description": "Debe coincidir exactamente con una URI whitelist de la Application."
+                    }
+                },
+                "required": [
+                    "app_id",
+                    "video"
+                ]
+            },
+            "LoginResponse": {
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "first_name": {
+                        "type": "string"
+                    },
+                    "last_name": {
+                        "type": "string"
+                    },
+                    "distance": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "liveness": {
+                        "$ref": "#/components/schemas/LivenessReport"
+                    },
+                    "tokens": {
+                        "$ref": "#/components/schemas/TokenPair"
+                    }
+                },
+                "required": [
+                    "distance",
+                    "email",
+                    "first_name",
+                    "last_name",
+                    "liveness",
+                    "tokens",
+                    "user_id"
+                ]
+            },
+            "RegisterRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "app_id": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "minLength": 1
+                    },
+                    "phone": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 30
+                    },
+                    "video": {
+                        "type": "string",
+                        "format": "binary"
+                    },
+                    "redirect_uri": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true,
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "app_id",
+                    "email",
+                    "first_name",
+                    "last_name",
+                    "video"
+                ]
+            },
+            "RegisterResponse": {
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "first_name": {
+                        "type": "string"
+                    },
+                    "last_name": {
+                        "type": "string"
+                    },
+                    "liveness": {
+                        "$ref": "#/components/schemas/LivenessReport"
+                    },
+                    "quality_score": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "tokens": {
+                        "$ref": "#/components/schemas/TokenPair"
+                    }
+                },
+                "required": [
+                    "email",
+                    "first_name",
+                    "last_name",
+                    "liveness",
+                    "quality_score",
+                    "tokens",
+                    "user_id"
+                ]
+            },
+            "TokenPair": {
+                "type": "object",
+                "properties": {
+                    "access": {
+                        "type": "string"
+                    },
+                    "refresh": {
+                        "type": "string"
+                    },
+                    "redirect_token": {
+                        "type": "string"
+                    },
+                    "redirect_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "access",
+                    "redirect_token",
+                    "refresh"
+                ]
+            },
+            "TokenRefreshRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "refresh": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "refresh"
+                ]
+            },
+            "TokenRefreshResponse": {
+                "type": "object",
+                "properties": {
+                    "access": {
+                        "type": "string"
+                    },
+                    "refresh": {
+                        "type": "string",
+                        "description": "Presente si se rota el refresh."
+                    }
+                },
+                "required": [
+                    "access"
+                ]
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "tenants",
+            "description": "Validación pública de Applications."
+        },
+        {
+            "name": "auth",
+            "description": "Login / registro biométrico y refresh de tokens."
+        },
+        {
+            "name": "system",
+            "description": "Health y utilidades."
+        }
+    ]
+}
