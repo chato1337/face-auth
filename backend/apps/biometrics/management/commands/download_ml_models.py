@@ -24,7 +24,10 @@ MINIFASNET_URL = (
     "raw/master/resources/anti_spoof_models/2.7_80x80_MiniFASNetV2.pth"
 )
 MINIFASNET_ONNX_URLS = [
-    "https://github.com/YashasSamaga/Silent-Face-Anti-Spoofing/raw/master/resources/anti_spoof_models/2.7_80x80_MiniFASNetV2.onnx",
+    # Release ONNX (yakhyo) — estable; el raw upstream .onnx suele 404.
+    "https://github.com/yakhyo/face-anti-spoofing/releases/download/weights/MiniFASNetV2.onnx",
+    "https://huggingface.co/garciafido/minifasnet-v2-anti-spoofing-onnx/resolve/main/MiniFASNetV2.onnx",
+    "https://raw.githubusercontent.com/QingHeYang/Silent-Face-Anti-Spoofing-onnx/main/onnx/2.7_80x80_MiniFASNetV2.onnx",
 ]
 
 

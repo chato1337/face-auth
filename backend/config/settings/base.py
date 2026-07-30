@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -170,6 +171,12 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
+
+# Header multi-tenant enviado por el frontend (apiFetch / apiMultipart).
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+    "x-app-id",
+)
 
 # Umbrales por defecto del pipeline (sobreescritos por Application en runtime)
 LIVENESS_THRESHOLD_DEFAULT = env("LIVENESS_THRESHOLD_DEFAULT")

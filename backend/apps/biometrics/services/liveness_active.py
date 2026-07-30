@@ -3,6 +3,7 @@ Liveness activo: parpadeo (EAR) + variación de pose con MediaPipe Face Landmark
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,8 @@ import numpy as np
 from django.conf import settings
 
 from apps.biometrics.exceptions import FaceNotFoundError, ModelNotAvailableError, SpoofDetectedError
+
+logger = logging.getLogger("apps.biometrics.liveness_active")
 
 # Índices Face Landmarker (~478) compatibles con el antiguo Face Mesh para ojos/pose.
 LEFT_EYE = [33, 160, 158, 133, 153, 144]
@@ -50,7 +53,10 @@ class ActiveLivenessChecker:
 
     EAR_BLINK_THRESHOLD = 0.21
     MIN_BLINKS = 1
-    MIN_POSE_DELTA = 3.0  # grados acumulados (yaw+pitch)
+    # Pose: en clips cortos (~2.5s) el movimiento natural suele ser < 3°.
+    # Sin parpadeo exigimos más movimiento (anti-foto); con parpadeo basta micro-movimiento.
+    MIN_POSE_DELTA = 3.0  # yaw+pitch (ptp) sin parpadeo válido
+    MIN_POSE_DELTA_WITH_BLINK = 0.5  # con ≥1 parpadeo (señal fuerte de liveness)
     MIN_FACE_RATIO = 0.5
 
     def __init__(self, model_path: Path | None = None):
@@ -117,6 +123,14 @@ class ActiveLivenessChecker:
 
         face_ratio = faces / len(frames)
         if face_ratio < self.MIN_FACE_RATIO or not ears:
+            logger.warning(
+                "active_liveness face_not_found frames=%d faces=%d face_ratio=%.2f "
+                "min_face_ratio=%.2f",
+                len(frames),
+                faces,
+                face_ratio,
+                self.MIN_FACE_RATIO,
+            )
             raise FaceNotFoundError(
                 "No se detectó un rostro de forma consistente en el clip.",
                 field="video",
@@ -129,14 +143,17 @@ class ActiveLivenessChecker:
         min_ear = float(np.min(ears))
         mean_ear = float(np.mean(ears))
 
+        has_blink = blink_count >= self.MIN_BLINKS
+        pose_min = self.MIN_POSE_DELTA_WITH_BLINK if has_blink else self.MIN_POSE_DELTA
+
         blink_score = min(1.0, blink_count / max(self.MIN_BLINKS, 1))
-        pose_score = min(1.0, pose_delta / max(self.MIN_POSE_DELTA, 1e-6))
+        pose_score = min(1.0, pose_delta / max(pose_min, 1e-6))
         score = 0.55 * blink_score + 0.45 * pose_score
 
         reasons: list[str] = []
-        if blink_count < self.MIN_BLINKS:
+        if not has_blink:
             reasons.append("no se detectó parpadeo")
-        if pose_delta < self.MIN_POSE_DELTA:
+        if pose_delta < pose_min:
             reasons.append("cabeza demasiado estática (posible foto/pantalla)")
 
         passed = len(reasons) == 0
@@ -150,6 +167,20 @@ class ActiveLivenessChecker:
             score=score,
         )
         if not passed:
+            logger.warning(
+                "active_liveness spoof_detected reasons=%s blinks=%d (min=%d) "
+                "pose_delta=%.2f (min=%.2f with_blink=%s) min_ear=%.3f "
+                "ear_blink_threshold=%.3f score=%.3f",
+                reasons,
+                blink_count,
+                self.MIN_BLINKS,
+                pose_delta,
+                pose_min,
+                has_blink,
+                min_ear,
+                self.EAR_BLINK_THRESHOLD,
+                score,
+            )
             raise SpoofDetectedError(
                 "Liveness activo fallido: " + "; ".join(reasons),
                 field="video",

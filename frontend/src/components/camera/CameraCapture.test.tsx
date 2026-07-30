@@ -30,4 +30,33 @@ describe("CameraCapture", () => {
       value: original,
     })
   })
+
+  it("permite iniciar la grabación tocando el círculo del rostro", async () => {
+    const user = userEvent.setup()
+    const track = { stop: vi.fn() }
+    const stream = {
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+    } as unknown as MediaStream
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue(stream),
+      },
+    })
+
+    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
+
+    render(<CameraCapture onCapture={vi.fn()} />)
+    await user.click(screen.getByRole("button", { name: /activar cámara/i }))
+
+    const oval = await screen.findByRole("button", {
+      name: /tocar el círculo para grabar/i,
+    })
+    expect(oval).toBeEnabled()
+    await user.click(oval)
+
+    expect(await screen.findByText(/prepárate/i)).toBeInTheDocument()
+  })
 })

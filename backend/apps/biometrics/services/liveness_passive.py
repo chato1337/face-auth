@@ -3,14 +3,17 @@ Liveness pasivo: MiniFASNetV2 vía ONNXRuntime.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
 import numpy as np
+from django.conf import settings
 
 from apps.biometrics.exceptions import ModelNotAvailableError, SpoofDetectedError
-from django.conf import settings
+
+logger = logging.getLogger("apps.biometrics.liveness_passive")
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,15 @@ class PassiveLivenessClassifier:
         aggregate = float(np.mean(scores))
         passed = aggregate >= threshold
         if not passed:
+            logger.warning(
+                "passive_liveness spoof_detected score=%.3f threshold=%.3f "
+                "frame_scores=%s crops=%d model=%s",
+                aggregate,
+                threshold,
+                [round(s, 3) for s in scores],
+                len(face_crops),
+                self.model_path.name,
+            )
             raise SpoofDetectedError(
                 f"Liveness pasivo fallido (score={aggregate:.3f} < umbral={threshold:.3f}).",
                 field="video",
@@ -84,8 +96,9 @@ class PassiveLivenessClassifier:
     @staticmethod
     def _score_from_output(output: np.ndarray) -> float:
         """
-        MiniFASNet suele devolver logits [fake, real] o probabilidad de real.
-        Normalizamos a score 'real' en [0, 1].
+        MiniFASNetV2 (Silent-Face) → logits de 3 clases: [print, replay, real].
+        Score de liveness = P(real) = probs[2] = 1 - (P(print)+P(replay)).
+        También soporta salidas binarias [fake, real] o un único logit.
         """
         arr = np.asarray(output).reshape(-1).astype(np.float64)
         if arr.size == 1:
@@ -93,9 +106,10 @@ class PassiveLivenessClassifier:
             if 0.0 <= val <= 1.0:
                 return val
             return float(1.0 / (1.0 + np.exp(-val)))
-        # Softmax sobre clases; asumimos índice 1 = real si hay 2+ clases
         exp = np.exp(arr - np.max(arr))
         probs = exp / np.sum(exp)
-        if probs.size >= 2:
+        if probs.size >= 3:
+            return float(probs[2])
+        if probs.size == 2:
             return float(probs[1])
         return float(probs[0])

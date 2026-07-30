@@ -30,6 +30,7 @@ export function CameraCapture({
 }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const recordingLockRef = useRef(false)
   const [phase, setPhase] = useState<Phase>("idle")
   const [countdown, setCountdown] = useState(RECORDING.countdownSeconds)
   const [error, setError] = useState<string | null>(null)
@@ -65,18 +66,21 @@ export function CameraCapture({
   }
 
   async function startRecording() {
-    if (!streamRef.current || disabled) return
+    if (!streamRef.current || disabled || phase !== "preview" || recordingLockRef.current) {
+      return
+    }
+    recordingLockRef.current = true
     setError(null)
     setPhase("countdown")
     setCountdown(RECORDING.countdownSeconds)
 
-    for (let i = RECORDING.countdownSeconds; i > 0; i -= 1) {
-      setCountdown(i)
-      await wait(1000)
-    }
-
-    setPhase("recording")
     try {
+      for (let i = RECORDING.countdownSeconds; i > 0; i -= 1) {
+        setCountdown(i)
+        await wait(1000)
+      }
+
+      setPhase("recording")
       const blob = await recordClip(streamRef.current)
       setPhase("done")
       stopStream(streamRef.current)
@@ -92,6 +96,8 @@ export function CameraCapture({
           : "Error al grabar. Inténtalo de nuevo."
       setError(message)
       setPhase("error")
+    } finally {
+      recordingLockRef.current = false
     }
   }
 
@@ -124,18 +130,25 @@ export function CameraCapture({
           </div>
         )}
 
-        {/* Face oval guide */}
+        {/* Face oval guide — en preview, tap/click inicia la grabación */}
         {showVideo && (
-          <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
-            aria-hidden
-          >
-            <div
+          <div className="absolute inset-0 flex items-center justify-center">
+            <button
+              type="button"
+              disabled={phase !== "preview" || disabled}
+              onClick={() => void startRecording()}
+              aria-label="Tocar el círculo para grabar el rostro"
               className={cn(
-                "h-[62%] w-[72%] rounded-[50%] border-2 transition-colors duration-300",
-                phase === "recording"
-                  ? "border-emerald-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
-                  : "border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]",
+                "h-[62%] w-[72%] rounded-[50%] border-2 bg-transparent transition-colors duration-300",
+                "shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+                phase === "recording" &&
+                  "pointer-events-none border-emerald-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]",
+                phase === "countdown" && "pointer-events-none border-white/70",
+                phase === "preview" &&
+                  !disabled &&
+                  "cursor-pointer border-white/80 hover:border-white active:scale-[0.99] active:border-emerald-300/90",
+                phase === "preview" && disabled && "pointer-events-none border-white/50",
               )}
             />
           </div>
@@ -168,8 +181,10 @@ export function CameraCapture({
       )}
 
       <p className="text-center text-sm text-muted-foreground">
-        Centra tu rostro, parpadea con naturalidad y mantén la cabeza ligeramente en
-        movimiento. Clip de ~{RECORDING.durationMs / 1000}s.
+        Centra tu rostro en el círculo y tócalo para grabar. Durante la grabación{" "}
+        <span className="font-medium text-foreground">parpadea</span> y mueve un poco la
+        cabeza (no te quedes completamente quieto). Clip de ~
+        {RECORDING.durationMs / 1000}s.
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
