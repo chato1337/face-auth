@@ -76,9 +76,20 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASES = {
-    "default": env.db("DATABASE_URL", default="postgres://faceauth:faceauth@localhost:5432/faceauth"),
-}
+# Preferir DATABASE_URL si existe; si no, armar desde POSTGRES_*.
+if env("DATABASE_URL", default=None):
+    DATABASES = {"default": env.db("DATABASE_URL")}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": env("POSTGRES_DB", default="faceauth"),
+            "USER": env("POSTGRES_USER", default="faceauth"),
+            "PASSWORD": env("POSTGRES_PASSWORD", default="faceauth"),
+            "HOST": env("POSTGRES_HOST", default="localhost"),
+            "PORT": env("POSTGRES_PORT", default="5432"),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
