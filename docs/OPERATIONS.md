@@ -47,6 +47,19 @@ pipenv run python manage.py rotate_api_key --app-id app_XXX --yes
 
 La clave anterior queda inválida de inmediato. Entrega la nueva al cliente por canal seguro.
 
+## Modelos ML en despliegue fresco
+
+En Docker, `entrypoint.sh` ejecuta `python manage.py download_ml_models` antes de migrar y arrancar gunicorn. La primera vez descarga Face Landmarker, buffalo_s y MiniFASNet (puede tardar varios minutos). Reinicios posteriores son rápidos (archivos ya presentes).
+
+Si el pipeline responde `model_not_available` / 503, falta el peso en `apps/biometrics/ml_models/` — corre a mano:
+
+```bash
+# Dentro del contenedor backend, o en hybrid local:
+python manage.py download_ml_models
+# hybrid:
+# pipenv run python manage.py download_ml_models
+```
+
 ## Rotar / actualizar modelos ONNX
 
 1. Descarga nueva versión a un directorio staging:

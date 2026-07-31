@@ -34,9 +34,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # entrypoint.sh ya corre download_ml_models + migrate (necesario: el bind-mount
+    # pisa los pesos del build en instalaciones frescas).
     command: >
-      sh -c "python manage.py migrate --noinput &&
-             gunicorn config.wsgi:application --bind 0.0.0.0:$$BACKEND_PORT --reload --workers 2"
+      sh -c "gunicorn config.wsgi:application --bind 0.0.0.0:$$BACKEND_PORT --reload --workers 2"
 
   frontend:
     build:

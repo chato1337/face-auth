@@ -77,6 +77,11 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("Descarga de modelos finalizada."))
 
     def _download_insightface(self, root: Path) -> None:
+        buffalo_dir = root / "models" / "buffalo_s"
+        if buffalo_dir.is_dir() and any(buffalo_dir.iterdir()):
+            self.stdout.write(f"  InsightFace buffalo_s ya existe ({buffalo_dir})")
+            return
+
         self.stdout.write("Descargando InsightFace buffalo_s…")
         try:
             from insightface.app import FaceAnalysis

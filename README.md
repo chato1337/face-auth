@@ -81,6 +81,8 @@ cp .env.example .env
 docker compose up --build
 ```
 
+El backend, al arrancar (`entrypoint.sh`), ejecuta `download_ml_models` (pesos Face Landmarker, buffalo_s, MiniFASNet) y luego las migraciones. La primera subida puede tardar varios minutos por la descarga. En build de imagen también se precargan; con bind-mount de Compose los pesos quedan en `backend/apps/biometrics/ml_models/` del host.
+
 Puertos por defecto (configurables en `.env` con `BACKEND_PORT` / `FRONTEND_PORT`):
 
 | Servicio  | Variable | Default | URL |
