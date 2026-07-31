@@ -93,20 +93,18 @@ Puertos por defecto (configurables en `.env` con `BACKEND_PORT` / `FRONTEND_PORT
 
 API documentada: `http://localhost:${BACKEND_PORT}/api/docs/` · `/api/redoc/`
 
-### Cambiar puertos
+### Cambiar puertos / host del API
 
-En el `.env` raíz:
+Todo se configura en el `.env` raíz (Vite lo lee vía `envDir` del monorepo):
 
 ```bash
 BACKEND_PORT=8001
 FRONTEND_PORT=5174
+VITE_API_BASE_URL=http://192.168.1.10:8001   # host+puerto que ve el navegador
+CORS_ALLOWED_ORIGINS=http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.10:5174
 ```
 
-Con Docker Compose, `CORS_ALLOWED_ORIGINS` y `VITE_API_BASE_URL` se derivan de esos valores. En desarrollo híbrido (sin Compose para las apps), actualiza también:
-
-- `CORS_ALLOWED_ORIGINS` → orígenes con el nuevo `FRONTEND_PORT`
-- `VITE_API_BASE_URL` (raíz y `frontend/.env`) → `http://localhost:<BACKEND_PORT>`
-- `FRONTEND_PORT` en `frontend/.env` (Vite lo lee al arrancar)
+`VITE_API_BASE_URL` es la URL completa: Compose **no** la reescribe a `localhost`. Tras cambiar `.env`, reinicia Vite (`bun run dev` / `docker compose up`).
 
 ---
 
@@ -141,9 +139,8 @@ pipenv run python manage.py create_application --name "Demo" \
 
 ```bash
 cd frontend
-cp .env.example .env   # FRONTEND_PORT + VITE_API_BASE_URL
 bun install
-bun run dev            # escucha en FRONTEND_PORT
+bun run dev            # FRONTEND_PORT + VITE_API_BASE_URL desde el .env raíz
 ```
 
 URLs útiles (defaults; sustituye el puerto si lo cambiaste y `app_XXXX` por el `app_id`):

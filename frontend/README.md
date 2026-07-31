@@ -6,19 +6,18 @@ Vite + React + TypeScript. Flujos de login y registro biométrico (SSO hosted) y
 
 ```bash
 bun install
-cp .env.example .env
-# Ajusta FRONTEND_PORT y VITE_API_BASE_URL si el backend no usa el puerto 8000
+# Configura FRONTEND_PORT y VITE_API_BASE_URL en el `.env` de la raíz del monorepo
 bun run dev
 ```
 
-Variables relevantes (`frontend/.env`):
+Variables (`.env` raíz; Vite usa `envDir` del monorepo):
 
 | Variable | Default | Uso |
 |----------|---------|-----|
 | `FRONTEND_PORT` | `5173` | Puerto del servidor Vite (`strictPort`) |
-| `VITE_API_BASE_URL` | `http://localhost:8000` | Base URL del API (debe coincidir con `BACKEND_PORT`) |
+| `VITE_API_BASE_URL` | `http://localhost:8000` | URL completa del API vista desde el navegador (host + puerto) |
 
-En Docker Compose estos valores se inyectan desde el `.env` raíz (`FRONTEND_PORT` / `BACKEND_PORT`).
+Si cambias el host (p. ej. IP LAN), edita `VITE_API_BASE_URL` entero — no solo `BACKEND_PORT` — y reinicia Vite.
 
 Abrir con tenant válido, por ejemplo:
 

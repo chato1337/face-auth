@@ -6,13 +6,23 @@ import { loadEnv } from "vite"
 import { defineConfig } from "vitest/config"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+/** `.env` del monorepo (fuente de verdad para VITE_* y FRONTEND_PORT). */
+const monorepoEnvDir = path.resolve(__dirname, "..")
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, __dirname, "")
-  const port = Number(env.FRONTEND_PORT || process.env.FRONTEND_PORT || 5173)
+  // Prioridad: process.env (Compose) > .env raíz > frontend/.env (fallback local)
+  const rootEnv = loadEnv(mode, monorepoEnvDir, "")
+  const localEnv = loadEnv(mode, __dirname, "")
+  const port = Number(
+    process.env.FRONTEND_PORT ||
+      rootEnv.FRONTEND_PORT ||
+      localEnv.FRONTEND_PORT ||
+      5173,
+  )
 
   return {
+    envDir: monorepoEnvDir,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
