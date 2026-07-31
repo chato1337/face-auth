@@ -1,0 +1,4 @@
+# Evita CRLF en scripts (en Linux, `exec ./script.sh` falla con
+# "no such file or directory" si el shebang queda como #!/bin/sh\r).
+*.sh text eol=lf
+entrypoint.sh text eol=lf

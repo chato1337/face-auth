@@ -11,6 +11,9 @@
 #
 # Los pesos ML (gitignored) se descargan en build y de nuevo en el entrypoint
 # (idempotente): el bind-mount de compose pisa /app y vacía ml_models/ en hosts frescos.
+#
+# El entrypoint vive en /usr/local/bin (fuera de /app) para que el volume
+# ./backend:/app no lo borre ni lo sustituya por un checkout con CRLF.
 FROM python:3.11-slim-bookworm AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -38,7 +41,12 @@ RUN pipenv install --deploy --ignore-pipfile --system \
     && pip uninstall -y pipenv virtualenv || true
 
 COPY . .
-RUN chmod +x /app/entrypoint.sh
+
+# Fuera de /app: sobrevive al bind-mount de Compose. Normaliza CRLF por si el
+# contexto de build viene de un checkout con autocrlf.
+RUN sed -i 's/\r$//' /app/entrypoint.sh \
+    && cp /app/entrypoint.sh /usr/local/bin/faceauth-entrypoint.sh \
+    && chmod +x /usr/local/bin/faceauth-entrypoint.sh
 
 # Mínimo para que `download_ml_models` pueda bootstrappear Django en build.
 ENV DJANGO_SETTINGS_MODULE=config.settings.dev \
@@ -52,5 +60,5 @@ RUN python manage.py download_ml_models
 
 EXPOSE 8000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/faceauth-entrypoint.sh"]
 CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${BACKEND_PORT:-8000} --workers 2"]
