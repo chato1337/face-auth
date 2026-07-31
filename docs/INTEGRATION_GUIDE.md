@@ -4,7 +4,7 @@
 >
 > Referencias: diseño en [`ARCHITECTURE.md`](ARCHITECTURE.md) · operación de tenants en [`OPERATIONS.md`](OPERATIONS.md) · contrato OpenAPI navegable en `/api/docs/` (Swagger UI) y `/api/redoc/`.
 
-En esta guía, `<FACEAUTH_WEB>` es la URL del frontend SSO de Face-Auth (dev: `http://localhost:5173`) y `<FACEAUTH_API>` la del backend (dev: `http://localhost:8000`).
+En esta guía, `<FACEAUTH_WEB>` es la URL del frontend SSO de Face-Auth (dev: `http://localhost:<FRONTEND_PORT>`, default `5173`) y `<FACEAUTH_API>` la del backend (dev: `http://localhost:<BACKEND_PORT>`, default `8000`). Los puertos se configuran en el `.env` raíz.
 
 ---
 

@@ -81,15 +81,32 @@ cp .env.example .env
 docker compose up --build
 ```
 
-| Servicio  | URL                     |
-|-----------|-------------------------|
-| Frontend  | http://localhost:5173   |
-| Backend   | http://localhost:8000   |
-| Postgres  | localhost:5433          |
+Puertos por defecto (configurables en `.env` con `BACKEND_PORT` / `FRONTEND_PORT`):
+
+| Servicio  | Variable | Default | URL |
+|-----------|----------|---------|-----|
+| Frontend  | `FRONTEND_PORT` | `5173` | http://localhost:5173 |
+| Backend   | `BACKEND_PORT` | `8000` | http://localhost:8000 |
+| Postgres  | `POSTGRES_PORT` | `5433` | localhost:5433 |
 
 > Si ya tienes Postgres nativo en `:5432`, el compose mapea el contenedor a **5433** a propósito.
 
-API documentada: http://localhost:8000/api/docs/ · http://localhost:8000/api/redoc/
+API documentada: `http://localhost:${BACKEND_PORT}/api/docs/` · `/api/redoc/`
+
+### Cambiar puertos
+
+En el `.env` raíz:
+
+```bash
+BACKEND_PORT=8001
+FRONTEND_PORT=5174
+```
+
+Con Docker Compose, `CORS_ALLOWED_ORIGINS` y `VITE_API_BASE_URL` se derivan de esos valores. En desarrollo híbrido (sin Compose para las apps), actualiza también:
+
+- `CORS_ALLOWED_ORIGINS` → orígenes con el nuevo `FRONTEND_PORT`
+- `VITE_API_BASE_URL` (raíz y `frontend/.env`) → `http://localhost:<BACKEND_PORT>`
+- `FRONTEND_PORT` en `frontend/.env` (Vite lo lee al arrancar)
 
 ---
 
@@ -109,7 +126,7 @@ pipenv install --dev
 cp ../.env.example ../.env    # si aún no existe
 pipenv run python manage.py migrate
 pipenv run python manage.py download_ml_models
-pipenv run python manage.py runserver 0.0.0.0:8000
+pipenv run python run_devserver.py   # respeta BACKEND_PORT del .env
 ```
 
 Crear un superuser (panel admin) y un tenant de prueba:
@@ -124,11 +141,12 @@ pipenv run python manage.py create_application --name "Demo" \
 
 ```bash
 cd frontend
+cp .env.example .env   # FRONTEND_PORT + VITE_API_BASE_URL
 bun install
-bun run dev
+bun run dev            # escucha en FRONTEND_PORT
 ```
 
-URLs útiles (sustituye `app_XXXX` por el `app_id` del tenant):
+URLs útiles (defaults; sustituye el puerto si lo cambiaste y `app_XXXX` por el `app_id`):
 
 | Flujo | URL |
 |-------|-----|
@@ -199,6 +217,7 @@ pipenv run pytest tests/unit/test_biometric_pipeline.py -v
 
 ## Notas operativas
 
+- Puertos: `BACKEND_PORT` / `FRONTEND_PORT` en `.env` (Compose, `run_devserver.py`, Vite).
 - `backend/Pipfile.lock` **sí se versiona** (builds reproducibles).
 - Pesos ML en `backend/apps/biometrics/ml_models/` (gitignored); se descargan con `download_ml_models`.
 - La extensión `pgvector` se habilita en la primera migración (`apps/tenants/migrations/0001_enable_pgvector.py`).

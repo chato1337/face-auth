@@ -8,6 +8,7 @@ RUN bun install --frozen-lockfile
 
 COPY . .
 
+ENV FRONTEND_PORT=5173
 EXPOSE 5173
 
-CMD ["bun", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+CMD ["sh", "-c", "bun run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT:-5173}"]

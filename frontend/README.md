@@ -1,14 +1,24 @@
 # Face-Auth Frontend
 
-Vite + React + TypeScript. Flujos de login y registro biométrico (Fase 4).
+Vite + React + TypeScript. Flujos de login y registro biométrico (SSO hosted) y panel admin.
 
 ## Arranque
 
 ```bash
 bun install
-cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8000
+cp .env.example .env
+# Ajusta FRONTEND_PORT y VITE_API_BASE_URL si el backend no usa el puerto 8000
 bun run dev
 ```
+
+Variables relevantes (`frontend/.env`):
+
+| Variable | Default | Uso |
+|----------|---------|-----|
+| `FRONTEND_PORT` | `5173` | Puerto del servidor Vite (`strictPort`) |
+| `VITE_API_BASE_URL` | `http://localhost:8000` | Base URL del API (debe coincidir con `BACKEND_PORT`) |
+
+En Docker Compose estos valores se inyectan desde el `.env` raíz (`FRONTEND_PORT` / `BACKEND_PORT`).
 
 Abrir con tenant válido, por ejemplo:
 
