@@ -65,12 +65,131 @@ Panel SPA en `/admin/login` (usuario Django con `is_superuser`): alta de tenants
 
 ---
 
-## Requisitos
+## Requisitos e instalación (local)
 
-- Docker + Docker Compose
-- [Python 3.11](https://www.python.org/) + [pipenv](https://pipenv.pypa.io/)
-- [bun](https://bun.sh/) (frontend)
-- En macOS/Linux local, para compilar el stack biométrico fuera de Docker puede hacer falta `cmake` y librerías OpenGL (`libgl`). En la imagen Docker ya están instaladas (ver `backend/Dockerfile`).
+Hay dos formas de correr todo en local. **Recomendado:** Docker Compose (Postgres con `pgvector` incluido). **Híbrido / full nativo:** instalar herramientas en el host.
+
+### Resumen de tecnologías
+
+| Componente | Qué instalar | Notas |
+|------------|--------------|--------|
+| Contenedores | [Docker](https://docs.docker.com/get-docker/) + Docker Compose v2 | Suficiente para el arranque rápido completo |
+| Base de datos | **PostgreSQL 16** + extensión **[pgvector](https://github.com/pgvector/pgvector)** | Compose usa la imagen `pgvector/pgvector:pg16` (extensión ya incluida) |
+| Backend runtime | [Python 3.11](https://www.python.org/) + [pipenv](https://pipenv.pypa.io/) | Fijado en `backend/Pipfile` |
+| Frontend | [bun](https://bun.sh/) | Vite + React |
+| Build biométrico (host) | `cmake`, compilador C/C++, OpenGL/`libgl`, OpenMP | Solo si instalas el backend **fuera** de Docker |
+| Pesos ML | Descarga vía `download_ml_models` | Face Landmarker, InsightFace `buffalo_s`, MiniFASNetV2 (no van en git) |
+| CPU | **AES-NI** recomendado | MediaPipe (liveness activo) puede matar el proceso (`SIGILL`) en CPUs sin AES (p. ej. Celeron N2930). Comprueba: `grep -m1 -o aes /proc/cpuinfo` |
+
+Opcional en producción / multi-worker: **Redis** (`REDIS_URL`) para rate limiting compartido.
+
+### Opción A — Solo Docker (menos fricción)
+
+Instala Docker Desktop (macOS/Windows) o Docker Engine + Compose (Linux). No hace falta Postgres ni Python en el host.
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+La imagen `db` ya trae Postgres 16 + `pgvector`. El backend descarga modelos ML en el entrypoint.
+
+### Opción B — Híbrido (Postgres en Docker, apps en el host)
+
+#### 1. Herramientas de aplicación
+
+```bash
+# Python 3.11 (ej. pyenv / apt / Homebrew)
+python3.11 --version
+
+# pipenv
+pip install pipenv
+# o: brew install pipenv
+
+# bun (frontend)
+curl -fsSL https://bun.sh/install | bash
+```
+
+#### 2. Dependencias de sistema (backend nativo)
+
+Necesarias para compilar/ejecutar OpenCV, MediaPipe, InsightFace y ONNX Runtime **en el host**:
+
+**Debian / Ubuntu**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential \
+  cmake \
+  libgl1 \
+  libglib2.0-0 \
+  libgomp1 \
+  curl
+```
+
+**macOS (Homebrew)**
+
+```bash
+xcode-select --install   # si aún no tienes CLT
+brew install cmake
+```
+
+En la imagen Docker del backend estas librerías ya están (ver `backend/Dockerfile`).
+
+#### 3. PostgreSQL + pgvector
+
+**Recomendado (Compose):** no instales Postgres en el host.
+
+```bash
+docker compose up -d db
+```
+
+- Host: `localhost`
+- Puerto host: `POSTGRES_PORT` (default **5433**) → contenedor interno `5432`
+- Usuario / clave / DB: `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` (default `faceauth`)
+- Extensión `vector`: la crea la migración `apps/tenants/migrations/0001_enable_pgvector.py`
+
+**Postgres nativo en el host** (si no usas el servicio `db`):
+
+1. Instala **PostgreSQL 16** (o compatible con la imagen del proyecto).
+2. Instala la extensión **pgvector** para esa versión:
+   - Debian/Ubuntu (paquete distro o [instrucciones oficiales](https://github.com/pgvector/pgvector#installation)):
+     ```bash
+     sudo apt-get install -y postgresql-16-pgvector
+     # o compilar desde fuente contra tu pg_config
+     ```
+   - macOS: `brew install pgvector` (asócialo al Postgres de Homebrew).
+3. Crea rol y base, y habilita la extensión:
+
+```sql
+CREATE USER faceauth WITH PASSWORD 'faceauth';
+CREATE DATABASE faceauth OWNER faceauth;
+\c faceauth
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+4. Ajusta el `.env` raíz:
+
+```bash
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432          # o el puerto de tu instancia
+POSTGRES_USER=faceauth
+POSTGRES_PASSWORD=faceauth
+POSTGRES_DB=faceauth
+```
+
+Sin `pgvector` / `CREATE EXTENSION vector`, las migraciones y el matching facial fallan.
+
+### Checklist antes del primer arranque híbrido
+
+- [ ] Docker (al menos para `db`) **o** Postgres 16 + pgvector nativo
+- [ ] Python 3.11 + pipenv
+- [ ] bun
+- [ ] `cmake` + libs de sistema (si el backend corre en el host)
+- [ ] CPU con AES-NI si vas a ejercer liveness activo con MediaPipe
+- [ ] `.env` copiado desde `.env.example`
+- [ ] `pipenv install --dev` + `download_ml_models` + `migrate`
+- [ ] `bun install` en `frontend/`
 
 ---
 
@@ -83,15 +202,15 @@ docker compose up --build
 
 El backend, al arrancar (`entrypoint.sh`), ejecuta `download_ml_models` (pesos Face Landmarker, buffalo_s, MiniFASNet) y luego las migraciones. La primera subida puede tardar varios minutos por la descarga. En build de imagen también se precargan; con bind-mount de Compose los pesos quedan en `backend/apps/biometrics/ml_models/` del host.
 
-Puertos por defecto (configurables en `.env` con `BACKEND_PORT` / `FRONTEND_PORT`):
+Puertos host (configurables en `.env`):
 
-| Servicio  | Variable | Default | URL |
-|-----------|----------|---------|-----|
+| Servicio  | Variable | Default | URL / endpoint |
+|-----------|----------|---------|----------------|
 | Frontend  | `FRONTEND_PORT` | `5173` | http://localhost:5173 |
 | Backend   | `BACKEND_PORT` | `8000` | http://localhost:8000 |
 | Postgres  | `POSTGRES_PORT` | `5433` | localhost:5433 |
 
-> Si ya tienes Postgres nativo en `:5432`, el compose mapea el contenedor a **5433** a propósito.
+> Default `5433` evita choque con un Postgres nativo en `:5432`. Dentro de la red Docker el backend usa siempre `db:5432` (vía `DATABASE_URL` de Compose).
 
 API documentada: `http://localhost:${BACKEND_PORT}/api/docs/` · `/api/redoc/`
 
@@ -102,11 +221,12 @@ Todo se configura en el `.env` raíz (Vite lo lee vía `envDir` del monorepo):
 ```bash
 BACKEND_PORT=8001
 FRONTEND_PORT=5174
+POSTGRES_PORT=5434                           # puerto Postgres publicado en el host
 VITE_API_BASE_URL=http://192.168.1.10:8001   # host+puerto que ve el navegador
 CORS_ALLOWED_ORIGINS=http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.10:5174
 ```
 
-`VITE_API_BASE_URL` es la URL completa: Compose **no** la reescribe a `localhost`. Tras cambiar `.env`, reinicia Vite (`bun run dev` / `docker compose up`).
+En híbrido (backend en el host), `POSTGRES_HOST` + `POSTGRES_PORT` deben coincidir con el mapeo de Compose. `VITE_API_BASE_URL` es la URL completa: Compose **no** la reescribe a `localhost`. Tras cambiar `.env`, reinicia los servicios (`docker compose up` / Vite).
 
 Si sirves el frontend Vite (`dev` / `preview`) detrás de un dominio, añade el host:
 
@@ -224,7 +344,7 @@ pipenv run pytest tests/unit/test_biometric_pipeline.py -v
 
 ## Notas operativas
 
-- Puertos: `BACKEND_PORT` / `FRONTEND_PORT` en `.env` (Compose, `run_devserver.py`, Vite).
+- Puertos: `BACKEND_PORT` / `FRONTEND_PORT` / `POSTGRES_PORT` en `.env` (Compose, `run_devserver.py`, Vite).
 - `backend/Pipfile.lock` **sí se versiona** (builds reproducibles).
 - Pesos ML en `backend/apps/biometrics/ml_models/` (gitignored); se descargan con `download_ml_models`.
 - La extensión `pgvector` se habilita en la primera migración (`apps/tenants/migrations/0001_enable_pgvector.py`).

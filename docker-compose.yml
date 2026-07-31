@@ -1,18 +1,19 @@
 # Face-Auth — servicios locales
-# Puertos host configurables vía BACKEND_PORT / FRONTEND_PORT en `.env`.
+# Puertos host: BACKEND_PORT / FRONTEND_PORT / POSTGRES_PORT en `.env`.
 services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: faceauth
-      POSTGRES_PASSWORD: faceauth
-      POSTGRES_DB: faceauth
+      POSTGRES_USER: ${POSTGRES_USER:-faceauth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-faceauth}
+      POSTGRES_DB: ${POSTGRES_DB:-faceauth}
     ports:
-      - "5433:5432"
+      # Host ← POSTGRES_PORT; dentro de la red Docker el servicio sigue en :5432
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - faceauth_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U faceauth -d faceauth"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,7 +26,8 @@ services:
       - .env
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
-      DATABASE_URL: postgres://faceauth:faceauth@db:5432/faceauth
+      # Dentro de Compose el backend habla con db:5432 (no el puerto publicado al host).
+      DATABASE_URL: postgres://${POSTGRES_USER:-faceauth}:${POSTGRES_PASSWORD:-faceauth}@db:5432/${POSTGRES_DB:-faceauth}
       BACKEND_PORT: ${BACKEND_PORT:-8000}
     ports:
       - "${BACKEND_PORT:-8000}:${BACKEND_PORT:-8000}"
