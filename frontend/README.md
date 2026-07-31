@@ -16,8 +16,9 @@ Variables (`.env` raíz; Vite usa `envDir` del monorepo):
 |----------|---------|-----|
 | `FRONTEND_PORT` | `5173` | Puerto del servidor Vite (`strictPort`) |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | URL completa del API vista desde el navegador (host + puerto) |
+| `FRONTEND_ALLOWED_HOSTS` | _(vacío)_ | Hosts permitidos en `server.allowedHosts` / `preview` (coma-separados, o `true`) |
 
-Si cambias el host (p. ej. IP LAN), edita `VITE_API_BASE_URL` entero — no solo `BACKEND_PORT` — y reinicia Vite.
+Si Vite responde `Blocked request. This host is not allowed`, configura `FRONTEND_ALLOWED_HOSTS` con tu dominio (ej. `sso.tudominio.com`) y reinicia.
 
 Abrir con tenant válido, por ejemplo:
 

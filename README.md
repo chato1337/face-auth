@@ -106,6 +106,14 @@ CORS_ALLOWED_ORIGINS=http://localhost:5174,http://127.0.0.1:5174,http://192.168.
 
 `VITE_API_BASE_URL` es la URL completa: Compose **no** la reescribe a `localhost`. Tras cambiar `.env`, reinicia Vite (`bun run dev` / `docker compose up`).
 
+Si sirves el frontend Vite (`dev` / `preview`) detrás de un dominio, añade el host:
+
+```bash
+FRONTEND_ALLOWED_HOSTS=sso.tudominio.com
+```
+
+(Equivalente a `server.allowedHosts` de Vite. También actualiza `ALLOWED_HOSTS` y `CORS_ALLOWED_ORIGINS` del backend.)
+
 ---
 
 ## Desarrollo local (híbrido)
