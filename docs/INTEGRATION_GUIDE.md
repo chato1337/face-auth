@@ -21,6 +21,8 @@ Hay dos formas de integrarse:
 | **A. SSO hosted** (recomendado) | Rediriges el navegador al frontend de Face-Auth y recibes un token en tu callback | La mayoría de integraciones; cero código de cámara/biometría |
 | **B. API REST directa** | Tu propio frontend captura el video y llama a la API de Face-Auth | Apps que necesitan UI de captura propia (p. ej. móvil nativo) |
 
+En ambos modos Face-Auth **prueba identidad** (quién es la persona). Si tu aplicación ya tiene su propia gestión de autenticación/autorización (sesiones, cookies, JWT propios, roles, etc.), el patrón soportado es un **intercambio de tokens**: validas el token de Face-Auth en tu backend y, si es válido, **creas la sesión con tu login propio**. Face-Auth no emite ni gestiona la sesión de tu app; solo te entrega una prueba de identidad de un solo uso (§3.4).
+
 ---
 
 ## 2. Requisitos previos (alta del tenant)
@@ -119,13 +121,96 @@ Errores posibles (payload `{code, message, field}`):
 | 401 | `token_already_used` | El token ya fue consumido (posible replay) |
 | 401 | `user_inactive` | El usuario fue desactivado en tu tenant |
 
-Con la respuesta `200`, crea/actualiza tu sesión local mapeando `user_id` (UUID, estable por tenant) → tu usuario interno.
+Con la respuesta `200`, tienes una identidad verificada. El siguiente paso es crear la sesión de **tu** aplicación (§3.4).
 
-> **Importante:** la `api_key` es un secreto de servidor. Nunca llames a este endpoint desde el navegador ni la incluyas en código cliente. La evolución a code-exchange OAuth2 completo sigue registrada en [`MASTER_PLAN.md`](MASTER_PLAN.md).
+> **Importante:** la `api_key` es un secreto de servidor. Nunca llames a este endpoint desde el navegador ni la incluyas en código cliente. La evolución a code-exchange OAuth2 completo (authorization code → token) sigue registrada en [`MASTER_PLAN.md`](MASTER_PLAN.md); el flujo actual es el equivalente funcional: JWT de un solo uso + verificación server-to-server.
 
-### 3.4 Sin `redirect_uri` (modo embebido)
+### 3.4 Intercambio de tokens → sesión propia de tu aplicación
 
-Si abres el flujo sin `redirect_uri`, no hay redirección: los tokens quedan en la sesión del navegador dentro de Face-Auth. Útil solo para demos o cuando Face-Auth es tu única UI.
+Usa este flujo cuando tu app **ya tiene** autenticación/autorización propia (Django session, JWT interno, cookies firmadas, Spring Security, Auth0/Cognito como IdP secundario, etc.) y Face-Auth actúa solo como factor de identidad biométrica.
+
+```
+Usuario                Tu frontend              Face-Auth                 Tu backend
+   |                        |                        |                          |
+   |  "Iniciar sesión"      |                        |                          |
+   |----------------------->|                        |                          |
+   |                        |  redirect /login?app_id&redirect_uri              |
+   |                        |----------------------->|                          |
+   |                   captura biométrica            |                          |
+   |<------------------------------------------------|                          |
+   |                        |  callback?token=…      |                          |
+   |                        |<-----------------------|                          |
+   |                        |  POST /auth/callback {token}                      |
+   |                        |-------------------------------------------------->|
+   |                        |                        |  POST /token/verify/     |
+   |                        |                        |<-------------------------|
+   |                        |                        |  200 {user_id, email…}   |
+   |                        |                        |------------------------->|
+   |                        |                        |     crea/actualiza usuario
+   |                        |                        |     emite TU sesión
+   |                        |  Set-Cookie / JWT propio                          |
+   |                        |<--------------------------------------------------|
+   |                   app autenticada con TU login                             |
+```
+
+**Pasos en tu backend (callback):**
+
+1. Recibe el `token` del query (o del body si tu frontend lo reenvía).
+2. Llama a `POST /api/v1/auth/token/verify/` con tu `api_key` (§3.3). Si no es `200`, rechaza (401/403) y no crees sesión.
+3. Con `user_id` (UUID estable por tenant) busca o crea tu usuario interno (`external_id` / `faceauth_user_id` → tu tabla de usuarios). Usa `email`, `first_name`, `last_name` para sincronizar perfil si te conviene.
+4. Emite **tu** sesión: cookie de sesión, JWT firmado con tu secreto, ticket de tu IdP, etc. Aplica aquí tus roles, permisos y políticas de autorización.
+5. Responde al navegador ya autenticado en tu dominio (redirect a home, JSON con tu access token, etc.).
+
+Ejemplo mínimo (pseudocódigo; adapta al stack de tu app):
+
+```python
+# POST /auth/faceauth/callback  (tu backend)
+def faceauth_callback(request):
+    token = request.GET.get("token") or request.data.get("token")
+    if not token:
+        return unauthorized("missing_token")
+
+    # 1) Intercambio: prueba de identidad Face-Auth → claims confiables
+    verify = httpx.post(
+        f"{FACEAUTH_API}/api/v1/auth/token/verify/",
+        headers={"X-Api-Key": FACEAUTH_API_KEY, "Content-Type": "application/json"},
+        json={"app_id": FACEAUTH_APP_ID, "token": token},
+    )
+    if verify.status_code != 200:
+        return unauthorized(verify.json().get("code", "invalid_token"))
+
+    identity = verify.json()  # user_id, email, first_name, last_name, …
+
+    # 2) Mapeo a tu modelo de usuarios + login propio
+    user, _ = User.objects.get_or_create(
+        faceauth_user_id=identity["user_id"],
+        defaults={"email": identity["email"], "first_name": identity["first_name"], …},
+    )
+    # opcional: actualizar email/nombre si cambiaron en Face-Auth
+
+    # 3) Sesión de TU aplicación (no reutilices el JWT de Face-Auth como sesión)
+    login(request, user)                    # p. ej. sesión Django
+    # o: return {"access": issue_my_jwt(user), "refresh": …}
+
+    return redirect("/app")
+```
+
+**Reglas importantes:**
+
+| Qué | Detalle |
+|---|---|
+| Quién crea la sesión | **Tu backend**, después del `verify` exitoso |
+| Qué token usa el navegador después | El de **tu** app (cookie/JWT propio). Descarta el `token` del callback; ya fue consumido |
+| Access/refresh de Face-Auth | Solo necesarios si vas a llamar APIs de Face-Auth después; **no** son la sesión de tu producto |
+| Clave de enlace | Persiste `user_id` de Face-Auth como identificador estable; el email puede cambiar |
+| Un solo uso | El `verify` consume el token: no lo reenvíes ni lo verifiques dos veces |
+| Autorización | Roles, scopes y permisos siguen siendo responsabilidad de tu app |
+
+Este patrón es el contrato soportado hoy. No hace falta (ni está disponible) un endpoint OAuth2 `token` de authorization-code; `token/verify/` es el puente de intercambio.
+
+### 3.5 Sin `redirect_uri` (modo embebido)
+
+Si abres el flujo sin `redirect_uri`, no hay redirección: los tokens quedan en la sesión del navegador dentro de Face-Auth. Útil solo para demos o cuando Face-Auth es tu única UI — **no** aplica al intercambio de §3.4.
 
 ---
 
@@ -141,7 +226,7 @@ Si construyes tu propia captura (p. ej. app móvil), consume la API directamente
 | POST | `/api/v1/auth/login/` | Login biométrico (`multipart/form-data`) |
 | POST | `/api/v1/auth/register/` | Registro biométrico (`multipart/form-data`) |
 | POST | `/api/v1/auth/token/refresh/` | Renovar access token (JSON) |
-| POST | `/api/v1/auth/token/verify/` | Verificar token del callback SSO (JSON + `X-Api-Key`, ver §3.3) |
+| POST | `/api/v1/auth/token/verify/` | Verificar token del callback SSO (JSON + `X-Api-Key`; puente para sesión propia, ver §3.3–§3.4) |
 
 ### 4.2 Requisitos del video
 
@@ -251,7 +336,8 @@ En el modo SSO hosted estos errores los muestra la propia UI de Face-Auth y el f
 - [ ] `api_key` guardada en gestor de secretos (no en el repo).
 - [ ] Redirección a `<FACEAUTH_WEB>/login?app_id=…&redirect_uri=…` con la URI url-encodeada.
 - [ ] Callback llama a `POST /api/v1/auth/token/verify/` con la `api_key` (desde el servidor) y solo crea sesión con respuesta `200`.
-- [ ] Mapeo `user_id` (UUID) → usuario interno de tu app.
+- [ ] Intercambio (§3.4): tras `verify` 200, emites **tu** sesión/login propio; no reutilizas el JWT de Face-Auth como cookie de tu app.
+- [ ] Mapeo persistente `user_id` (UUID Face-Auth) → usuario interno de tu app.
 - [ ] Flujo de registro enlazado (`/register?app_id=…`) para usuarios nuevos.
 - [ ] Manejo de "usuario llega al callback sin token" (abandono/cancelación).
 - [ ] (Modo B) formulario conserva datos ante errores; video cumple §4.2; backoff ante 429.

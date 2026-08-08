@@ -26,6 +26,16 @@ const createSchema = z.object({
 
 type CreateValues = z.infer<typeof createSchema>
 
+/** URL del SSO hosted para probar el tenant desde el panel. */
+function tenantLoginHref(appId: string, redirectUris: unknown): string {
+  const params = new URLSearchParams({ app_id: appId })
+  if (Array.isArray(redirectUris)) {
+    const first = redirectUris.find((u): u is string => typeof u === "string" && u.length > 0)
+    if (first) params.set("redirect_uri", first)
+  }
+  return `/login?${params.toString()}`
+}
+
 export function ApplicationsListPage() {
   const [q, setQ] = useState("")
   const [showCreate, setShowCreate] = useState(false)
@@ -177,12 +187,20 @@ export function ApplicationsListPage() {
                   </td>
                   <td className="py-3 pr-3 text-zinc-600">{app.users_count ?? 0}</td>
                   <td className="py-3 text-right">
-                    <Link
-                      to={`/admin/applications/${app.app_id}`}
-                      className="font-medium text-teal-800 underline-offset-4 hover:underline"
-                    >
-                      Abrir
-                    </Link>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button asChild variant="outline" size="sm">
+                        <a
+                          href={tenantLoginHref(app.app_id, app.redirect_uris)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Ir al login
+                        </a>
+                      </Button>
+                      <Button asChild variant="ghost" size="sm">
+                        <Link to={`/admin/applications/${app.app_id}`}>Abrir</Link>
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
