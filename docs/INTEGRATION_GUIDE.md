@@ -276,7 +276,31 @@ curl -X POST "<FACEAUTH_API>/api/v1/auth/token/refresh/" \
 
 ### 4.4 Registro
 
+El enrolamiento exige un OTP de email **antes** de persistir el perfil biométrico.
+
 ```bash
+# 1) Solicitar código (crea TenantUser pendiente si no existe)
+curl -X POST "<FACEAUTH_API>/api/v1/otp/request/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app_id": "app_AbC123",
+    "purpose": "email_verify",
+    "email": "ada@example.com",
+    "first_name": "Ada",
+    "last_name": "Lovelace"
+  }'
+
+# 2) Validar en UI (no consume el código)
+curl -X POST "<FACEAUTH_API>/api/v1/otp/verify/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app_id": "app_AbC123",
+    "purpose": "email_verify",
+    "email": "ada@example.com",
+    "code": "123456"
+  }'
+
+# 3) Registrar con el mismo código en el payload
 curl -X POST "<FACEAUTH_API>/api/v1/auth/register/" \
   -H "X-App-Id: app_AbC123" \
   -F "app_id=app_AbC123" \
@@ -284,12 +308,13 @@ curl -X POST "<FACEAUTH_API>/api/v1/auth/register/" \
   -F "last_name=Lovelace" \
   -F "email=ada@example.com" \
   -F "phone=+57123456789" \
+  -F "otp_code=123456" \
   -F "video=@clip.webm;type=video/webm"
 ```
 
-Respuesta `201` con el mismo shape de `tokens` más `quality_score`. El email es único **por tenant**; un rostro ya enrolado en tu `app_id` se rechaza como duplicado.
+Respuesta `201` con el mismo shape de `tokens` más `quality_score`. El email es único **por tenant**; un rostro ya enrolado en tu `app_id` se rechaza como duplicado. En el modo hosted SSO, Face-Auth muestra el paso OTP; si integras la API directo, debes pedir y reenviar `otp_code`.
 
-**Regla de UX en errores de registro:** no resetees el formulario. Solo el video debe recapturarse; conserva los datos que el usuario ya escribió (para `email_taken`, regresa el foco al campo email).
+**Regla de UX en errores de registro:** no resetees el formulario. Solo el video debe recapturarse; conserva los datos que el usuario ya escribió (para `email_taken`, regresa el foco al campo email; para errores `otp_*`, vuelve al paso del código).
 
 ---
 
@@ -309,6 +334,7 @@ Todos los errores usan el payload uniforme:
 | 401 | `no_match` | Liveness OK pero el rostro no coincide con ningún usuario del tenant | Ofrecer registro o reintento |
 | 401 | `invalid_token` | Refresh token inválido/expirado | Re-autenticar |
 | 404 | `app_not_found` | `app_id` inexistente | Corregir configuración |
+| 400 | `otp_invalid` / `otp_expired` / `otp_locked` / `otp_not_found` | Código OTP incorrecto, vencido, bloqueado o no solicitado | Volver al paso OTP o reenviar |
 | 409 | `email_taken` | Email ya registrado en tu tenant | Mostrar error en el campo email, conservar formulario |
 | 409 | `duplicate_biometric` | El rostro ya está enrolado en tu tenant | Sugerir login |
 | 422 | `low_quality_capture` | Iluminación/encuadre/fps insuficientes | Mostrar el `message` (es accionable) y recapturar |
@@ -322,7 +348,7 @@ En el modo SSO hosted estos errores los muestra la propia UI de Face-Auth y el f
 
 ## 6. Límites y seguridad
 
-- **Rate limiting:** por defecto **30 requests/min por `app_id` + IP** en login/registro (configurable por despliegue). Diseña reintentos con backoff.
+- **Rate limiting:** por defecto **30 requests/min por `app_id` + IP** en login/registro (configurable por despliegue). OTP: máximo **3 códigos / 5 min por usuario** más un tope de cortesía por IP. Diseña reintentos con backoff.
 - **CORS:** si llamas a la API desde un navegador en tu propio dominio, tu origen debe estar en la whitelist de CORS del despliegue; solicítalo al operador junto con el alta del tenant.
 - **Privacidad del video:** Face-Auth procesa el clip en memoria y no lo persiste; solo se almacena el embedding facial (vector de 512 dimensiones) del enrolamiento. No guardes el clip en tu lado tampoco.
 - **Zero-Trust:** la detección de parpadeo del frontend es solo conveniencia de UX; toda la validación biométrica (liveness activo + pasivo + matching) ocurre en el backend sobre el video recibido. No asumas que un clip que "pasó" en el cliente será aceptado.

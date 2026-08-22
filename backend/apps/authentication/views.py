@@ -8,6 +8,7 @@ from datetime import datetime, timezone as dt_timezone
 
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from django.utils import timezone as django_timezone
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -38,6 +39,8 @@ from apps.authentication.services import (
 )
 from apps.biometrics.exceptions import BiometricPipelineError
 from apps.biometrics.services import BiometricService
+from apps.otp.mixins import ConsumesOtpMixin
+from apps.otp.models import OtpChallenge
 from apps.tenants.models import Application
 from core.throttling import AppIdScopedRateThrottle
 
@@ -95,6 +98,22 @@ EX_DUPLICATE = OpenApiExample(
     },
     response_only=True,
     status_codes=["409"],
+)
+EX_OTP_NOT_FOUND = OpenApiExample(
+    "OTP no solicitado",
+    value={
+        "code": "otp_not_found",
+        "message": "Solicita un código de verificación antes de registrarte.",
+        "field": "otp_code",
+    },
+    response_only=True,
+    status_codes=["400"],
+)
+EX_OTP_INVALID_REGISTER = OpenApiExample(
+    "OTP inválido en registro",
+    value={"code": "otp_invalid", "message": "Código incorrecto.", "field": "code"},
+    response_only=True,
+    status_codes=["400"],
 )
 EX_EMAIL_TAKEN = OpenApiExample(
     "Email duplicado",
@@ -312,17 +331,19 @@ class LoginView(APIView):
             del video_bytes
 
 
-class RegisterView(APIView):
+class RegisterView(ConsumesOtpMixin, APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
     parser_classes = [MultiPartParser, FormParser]
     throttle_classes = [AppIdScopedRateThrottle]
+    otp_purpose = OtpChallenge.Purpose.EMAIL_VERIFY
 
     @extend_schema(
         tags=["auth"],
         summary="Registro biométrico",
         description=(
-            "Flujo B: valida liveness, extrae embedding y crea TenantUser. "
+            "Flujo B: exige otp_code (email_verify ya solicitado), valida liveness, "
+            "extrae embedding y activa el TenantUser pendiente. "
             "En error el cliente debe conservar el formulario y solo reintentar el video."
         ),
         request=RegisterRequestSerializer,
@@ -333,6 +354,11 @@ class RegisterView(APIView):
                 response=ErrorResponseSerializer,
                 description="Email o biometría duplicada",
                 examples=[EX_DUPLICATE, EX_EMAIL_TAKEN],
+            ),
+            400: OpenApiResponse(
+                response=ErrorResponseSerializer,
+                description="OTP ausente / inválido / app inactiva",
+                examples=[EX_OTP_NOT_FOUND, EX_OTP_INVALID_REGISTER, EX_APP_INACTIVE, EX_INVALID_REDIRECT],
             ),
         },
     )
@@ -349,7 +375,20 @@ class RegisterView(APIView):
         if rejected is not None:
             return rejected
 
-        if TenantUser.objects.filter(application=application, email__iexact=data["email"]).exists():
+        user = TenantUser.objects.filter(
+            application=application,
+            email__iexact=data["email"],
+        ).first()
+        if user is None:
+            return Response(
+                {
+                    "code": "otp_not_found",
+                    "message": "Solicita un código de verificación antes de registrarte.",
+                    "field": "otp_code",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if user.is_active:
             return Response(
                 {
                     "code": "email_taken",
@@ -366,12 +405,21 @@ class RegisterView(APIView):
 
             try:
                 with transaction.atomic():
-                    user = TenantUser.objects.create(
-                        application=application,
-                        first_name=data["first_name"],
-                        last_name=data["last_name"],
-                        email=data["email"],
-                        phone=data.get("phone") or "",
+                    self.consume_otp(user, data["otp_code"])
+                    user.first_name = data["first_name"]
+                    user.last_name = data["last_name"]
+                    user.phone = data.get("phone") or ""
+                    user.is_active = True
+                    user.email_verified_at = django_timezone.now()
+                    user.save(
+                        update_fields=[
+                            "first_name",
+                            "last_name",
+                            "phone",
+                            "is_active",
+                            "email_verified_at",
+                            "updated_at",
+                        ]
                     )
                     service.persist_enrollment(user, enroll)
             except IntegrityError:

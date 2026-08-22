@@ -297,7 +297,9 @@ cd frontend && bun run generate:api
 |--------|------|-------------|
 | GET | `/api/v1/applications/{app_id}/` | Validar tenant (público) |
 | POST | `/api/v1/auth/login/` | Login biométrico (`multipart`: `app_id`, `video`, `redirect_uri?`) |
-| POST | `/api/v1/auth/register/` | Registro biométrico (`multipart`: datos + `video`) |
+| POST | `/api/v1/auth/register/` | Registro biométrico (`multipart`: datos + `video` + `otp_code`) |
+| POST | `/api/v1/otp/request/` | Solicitar código OTP (email) |
+| POST | `/api/v1/otp/verify/` | Validar OTP en UI (no consume) |
 | POST | `/api/v1/auth/token/refresh/` | Refrescar access token |
 | POST | `/api/v1/auth/token/verify/` | Verificar token SSO del callback (server-to-server, `X-Api-Key`) |
 | — | `/api/v1/admin/*` | Panel de operadores (JWT Django + `is_superuser`) |

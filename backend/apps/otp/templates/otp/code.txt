@@ -1,0 +1,3 @@
+Tu código de verificación es {{ code }}.
+
+Caduca en {{ ttl_minutes }} minutos. Si no solicitaste este código, ignora este mensaje.

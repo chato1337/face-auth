@@ -1,0 +1,7 @@
+Hola{% if first_name %} {{ first_name }}{% endif %},
+
+Usa este código para verificar tu correo y continuar el registro:
+
+{{ code }}
+
+El código caduca en {{ ttl_minutes }} minutos. Si no estás creando una cuenta, ignora este mensaje.

@@ -75,7 +75,8 @@ class TestApplicationEndpoint:
 
 @pytest.mark.django_db
 class TestRegisterLogin:
-    def test_register_success(self, api, application):
+    def test_register_success(self, api, application, settings):
+        settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
         embedding = np.random.randn(512).astype(np.float32)
         embedding /= np.linalg.norm(embedding)
         enroll = EnrollResult(
@@ -83,6 +84,20 @@ class TestRegisterLogin:
             liveness=LivenessReport(passed=True, active_score=0.9, passive_score=0.95),
             quality_score=0.88,
         )
+
+        with patch("apps.otp.services.generate_numeric_code", return_value="123456"):
+            otp = api.post(
+                "/api/v1/otp/request/",
+                {
+                    "app_id": application.app_id,
+                    "purpose": "email_verify",
+                    "email": "ada@example.com",
+                    "first_name": "Ada",
+                    "last_name": "Lovelace",
+                },
+                format="json",
+            )
+            assert otp.status_code == 200, otp.data
 
         with patch("apps.authentication.views.BiometricService") as svc_cls:
             svc = svc_cls.return_value
@@ -97,6 +112,7 @@ class TestRegisterLogin:
                     "last_name": "Lovelace",
                     "email": "ada@example.com",
                     "video": _video_upload(),
+                    "otp_code": "123456",
                     "redirect_uri": "http://localhost:3000/callback",
                 },
                 format="multipart",
@@ -106,7 +122,9 @@ class TestRegisterLogin:
         assert res.data["email"] == "ada@example.com"
         assert "access" in res.data["tokens"]
         assert res.data["tokens"]["redirect_url"].startswith("http://localhost:3000/callback")
-        assert TenantUser.objects.filter(email="ada@example.com").exists()
+        user = TenantUser.objects.get(email="ada@example.com")
+        assert user.is_active is True
+        assert user.email_verified_at is not None
 
     def test_register_email_taken(self, api, application):
         TenantUser.objects.create(
@@ -123,12 +141,54 @@ class TestRegisterLogin:
                 "last_name": "Lovelace",
                 "email": "ada@example.com",
                 "video": _video_upload(),
+                "otp_code": "000000",
             },
             format="multipart",
         )
         assert res.status_code == 409
         assert res.data["code"] == "email_taken"
         assert res.data["field"] == "email"
+
+    def test_register_wrong_otp_does_not_enroll(self, api, application, settings):
+        settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+        embedding = np.random.randn(512).astype(np.float32)
+        embedding /= np.linalg.norm(embedding)
+        enroll = EnrollResult(
+            embedding=embedding,
+            liveness=LivenessReport(passed=True, active_score=0.9, passive_score=0.95),
+            quality_score=0.88,
+        )
+        with patch("apps.otp.services.generate_numeric_code", return_value="123456"):
+            api.post(
+                "/api/v1/otp/request/",
+                {
+                    "app_id": application.app_id,
+                    "purpose": "email_verify",
+                    "email": "ada@example.com",
+                    "first_name": "Ada",
+                    "last_name": "Lovelace",
+                },
+                format="json",
+            )
+        with patch("apps.authentication.views.BiometricService") as svc_cls:
+            svc = svc_cls.return_value
+            svc.process_enrollment.return_value = enroll
+            res = api.post(
+                "/api/v1/auth/register/",
+                {
+                    "app_id": application.app_id,
+                    "first_name": "Ada",
+                    "last_name": "Lovelace",
+                    "email": "ada@example.com",
+                    "video": _video_upload(),
+                    "otp_code": "000000",
+                },
+                format="multipart",
+            )
+        assert res.status_code == 400
+        assert res.data["code"] == "otp_invalid"
+        svc.persist_enrollment.assert_not_called()
+        assert TenantUser.objects.get(email="ada@example.com").is_active is False
 
     def test_login_success(self, api, application):
         user = TenantUser.objects.create(

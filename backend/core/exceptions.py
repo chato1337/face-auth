@@ -3,23 +3,31 @@ Exception handler DRF uniforme: mapea errores del pipeline a {code, message, fie
 """
 from __future__ import annotations
 
-from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
 from apps.biometrics.exceptions import BiometricPipelineError
+from apps.otp.exceptions import OtpError
+
+
+def _typed_error_response(exc) -> Response:
+    response = Response(
+        {
+            "code": exc.code,
+            "message": exc.message,
+            "field": exc.field,
+        },
+        status=exc.http_status,
+    )
+    retry_after = getattr(exc, "retry_after", None)
+    if retry_after is not None:
+        response["Retry-After"] = str(int(retry_after))
+    return response
 
 
 def face_auth_exception_handler(exc, context):
-    if isinstance(exc, BiometricPipelineError):
-        return Response(
-            {
-                "code": exc.code,
-                "message": exc.message,
-                "field": exc.field,
-            },
-            status=exc.http_status,
-        )
+    if isinstance(exc, (BiometricPipelineError, OtpError)):
+        return _typed_error_response(exc)
 
     response = drf_exception_handler(exc, context)
     if response is not None:

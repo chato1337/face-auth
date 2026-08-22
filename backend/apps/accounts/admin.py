@@ -16,10 +16,19 @@ class BiometricProfileInline(admin.TabularInline):
 
 @admin.register(TenantUser)
 class TenantUserAdmin(admin.ModelAdmin):
-    list_display = ("email", "first_name", "last_name", "application", "is_active", "last_login_at", "created_at")
+    list_display = (
+        "email",
+        "first_name",
+        "last_name",
+        "application",
+        "is_active",
+        "email_verified_at",
+        "last_login_at",
+        "created_at",
+    )
     list_filter = ("is_active", "application")
     search_fields = ("email", "first_name", "last_name")
-    readonly_fields = ("id", "created_at", "updated_at", "last_login_at")
+    readonly_fields = ("id", "created_at", "updated_at", "last_login_at", "email_verified_at")
     inlines = [BiometricProfileInline]
 
 

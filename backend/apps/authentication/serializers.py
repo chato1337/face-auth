@@ -48,6 +48,11 @@ class RegisterRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     video = serializers.FileField()
+    otp_code = serializers.RegexField(
+        regex=r"^\d{6}$",
+        help_text="Código OTP de 6 dígitos (purpose=email_verify). Se consume en este request.",
+        error_messages={"invalid": "El código debe ser de 6 dígitos."},
+    )
     redirect_uri = serializers.URLField(required=False, allow_null=True)
 
 

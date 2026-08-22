@@ -12,6 +12,7 @@ export type RegisterInput = {
   email: string
   phone?: string
   video: Blob
+  otpCode: string
   redirectUri?: string | null
 }
 
@@ -25,6 +26,7 @@ export function useRegister() {
       form.append("email", input.email)
       form.append("phone", input.phone ?? "")
       form.append("video", input.video, "capture.webm")
+      form.append("otp_code", input.otpCode)
       if (input.redirectUri) {
         form.append("redirect_uri", input.redirectUri)
       }

@@ -21,13 +21,26 @@ vi.mock("@/context/TenantContext", () => ({
   }),
 }))
 
-// Evita que DashcamCapture descargue el WASM/modelo de MediaPipe en jsdom.
 vi.mock("@/components/camera/useFaceLandmarker", () => ({
   useFaceLandmarker: () => ({
     landmarker: null,
     status: "loading",
     error: null,
     retry: vi.fn(),
+  }),
+}))
+
+const requestOtp = vi.fn()
+const verifyOtp = vi.fn()
+
+vi.mock("@/api/hooks/useOtp", () => ({
+  useOtpRequest: () => ({
+    mutateAsync: requestOtp,
+    isPending: false,
+  }),
+  useOtpVerify: () => ({
+    mutateAsync: verifyOtp,
+    isPending: false,
   }),
 }))
 
@@ -45,22 +58,32 @@ function renderRegister() {
 }
 
 describe("RegisterPage", () => {
-  it("conserva los datos del formulario al pasar a captura", async () => {
+  it("pide OTP antes de la captura y conserva los datos al volver", async () => {
     const user = userEvent.setup()
+    requestOtp.mockResolvedValue({
+      challenge_id: "ch_1",
+      expires_in: 300,
+      destination_masked: "a***@example.com",
+      channel: "email",
+    })
+    verifyOtp.mockResolvedValue({ valid: true, expires_in: 280 })
+
     renderRegister()
 
     await user.type(screen.getByLabelText(/nombres/i), "Ada")
     await user.type(screen.getByLabelText(/apellidos/i), "Lovelace")
     await user.type(screen.getByLabelText(/correo/i), "ada@example.com")
-    await user.click(screen.getByRole("button", { name: /registro biométrico/i }))
+    await user.click(screen.getByRole("button", { name: /enviar código/i }))
 
-    // En jsdom no hay getUserMedia: la captura automática muestra el error
-    // de cámara, pero el flujo permite cancelar y volver al formulario.
+    expect(await screen.findByText(/a\*\*\*@example.com/i)).toBeInTheDocument()
+    await user.type(screen.getByLabelText(/código de verificación/i), "123456")
+
     expect(
       await screen.findByText(/no soporta acceso a la cámara/i),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: /cancelar/i }))
+    await user.click(screen.getByRole("button", { name: /volver/i }))
 
     expect(screen.getByLabelText(/nombres/i)).toHaveValue("Ada")
     expect(screen.getByLabelText(/correo/i)).toHaveValue("ada@example.com")

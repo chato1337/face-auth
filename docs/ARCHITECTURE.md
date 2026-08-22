@@ -64,21 +64,31 @@ face-auth/
 │   │   │   ├── views.py
 │   │   │   └── urls.py
 │   │   │
-│   │   └── authentication/                # Emisión de JWT SSO (TenantUser) + auth admin (Django User)
-│   │       ├── services.py                # tokens TenantUser / SSO redirect
-│   │       ├── admin_services.py          # login/refresh para operadores (is_superuser)
-│   │       ├── serializers.py
-│   │       ├── admin_serializers.py
-│   │       ├── views.py
-│   │       ├── admin_views.py
-│   │       ├── urls.py
-│   │       └── admin_urls.py
+│   │   ├── authentication/                # Emisión de JWT SSO (TenantUser) + auth admin (Django User)
+│   │   │   ├── services.py                # tokens TenantUser / SSO redirect
+│   │   │   ├── admin_services.py          # login/refresh para operadores (is_superuser)
+│   │   │   ├── serializers.py
+│   │   │   ├── admin_serializers.py
+│   │   │   ├── views.py
+│   │   │   ├── admin_views.py
+│   │   │   ├── urls.py
+│   │   │   └── admin_urls.py
+│   │   │
+│   │   └── otp/                           # OTP reutilizable (ATO / verificación de email)
+│   │       ├── models.py                  # OtpChallenge
+│   │       ├── services.py                # issue / verify / consume
+│   │       ├── pending.py                 # TenantUser pendiente en email_verify
+│   │       ├── mixins.py                  # ConsumesOtpMixin
+│   │       ├── channels/                  # SmtpEmailChannel + registry
+│   │       ├── views.py                   # POST /otp/request|verify
+│   │       └── urls.py
 │   │
 │   ├── core/                     # utilidades transversales
 │   │   ├── permissions.py        # HasValidAppId, IsSuperUser (admin v1)
-│   │   ├── middleware.py         # resuelve `request.application`; excluye `/api/v1/admin/`
+│   │   ├── middleware.py         # resuelve `request.application`; excluye `/api/v1/admin/` y `/api/v1/otp/`
 │   │   ├── pagination.py         # page size default para listados admin
-│   │   └── exceptions.py         # exception handler DRF uniforme
+│   │   ├── throttling.py         # AppIdScopedRateThrottle + otp_issue/otp_verify
+│   │   └── exceptions.py         # exception handler DRF uniforme (pipeline + OtpError)
 │   │
 │   ├── tests/
 │   │   ├── unit/
@@ -105,10 +115,13 @@ face-auth/
         │   └── hooks/
         │       ├── useLogin.ts
         │       ├── useRegister.ts
+        │       ├── useOtp.ts
         │       ├── useApplication.ts
         │       └── admin/          # hooks del panel (auth, applications, users)
         ├── components/
         │   ├── ui/                 # primitivos shadcn/ui
+        │   ├── otp/
+        │   │   └── OtpChallengeForm.tsx  # código 6 dígitos reutilizable
         │   ├── camera/
         │   │   ├── CameraCapture.tsx   # captura manual (fallback; ya no se usa en Login/Registro)
         │   │   ├── DashcamCapture.tsx  # captura pasiva: rostro alineado + parpadeo → auto-envío (Fase 7)
@@ -244,6 +257,7 @@ class TenantUser(models.Model):
     phone = models.CharField(max_length=30, blank=True)
 
     is_active = models.BooleanField(default=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

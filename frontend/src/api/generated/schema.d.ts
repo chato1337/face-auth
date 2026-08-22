@@ -232,7 +232,7 @@ export interface paths {
         put?: never;
         /**
          * Registro biométrico
-         * @description Flujo B: valida liveness, extrae embedding y crea TenantUser. En error el cliente debe conservar el formulario y solo reintentar el video.
+         * @description Flujo B: exige otp_code (email_verify ya solicitado), valida liveness, extrae embedding y activa el TenantUser pendiente. En error el cliente debe conservar el formulario y solo reintentar el video.
          */
         post: operations["v1_auth_register_create"];
         delete?: never;
@@ -292,6 +292,46 @@ export interface paths {
         get: operations["v1_health_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/otp/request/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Solicitar código OTP
+         * @description Emite un código de 6 dígitos al canal indicado (email en v1). Con purpose=email_verify crea un TenantUser pendiente si no existe. Cada emisión invalida el código anterior del mismo usuario y purpose. Máximo 3 códigos cada 5 minutos por usuario.
+         */
+        post: operations["v1_otp_request_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/otp/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validar código OTP (no consume)
+         * @description Comprueba el código para la UI. No lo marca como usado: el consumidor (p. ej. registro) debe enviar otp_code de nuevo y llamar consume().
+         */
+        post: operations["v1_otp_verify_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -448,6 +488,13 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `email` - Email
+         *     * `sms` - SMS
+         *     * `whatsapp` - WhatsApp
+         * @enum {string}
+         */
+        ChannelEnum: "email" | "sms" | "whatsapp";
         ErrorResponse: {
             code: string;
             message: string;
@@ -493,6 +540,38 @@ export interface components {
          * @enum {string}
          */
         ModelVersionEnum: "buffalo_s" | "mobilefacenet";
+        OtpRequestRequest: {
+            app_id: string;
+            purpose: components["schemas"]["PurposeEnum"];
+            /** @default email */
+            channel: components["schemas"]["ChannelEnum"];
+            /** Format: email */
+            email: string;
+            /** @default  */
+            first_name: string;
+            /** @default  */
+            last_name: string;
+            /** @default  */
+            phone: string;
+        };
+        OtpRequestResponse: {
+            /** Format: uuid */
+            challenge_id: string;
+            expires_in: number;
+            destination_masked: string;
+            channel: string;
+        };
+        OtpVerifyRequest: {
+            app_id: string;
+            purpose: components["schemas"]["PurposeEnum"];
+            /** Format: email */
+            email: string;
+            code: string;
+        };
+        OtpVerifyResponse: {
+            valid: boolean;
+            expires_in: number;
+        };
         PaginatedApplicationAdminList: {
             /** @example 123 */
             count: number;
@@ -553,6 +632,15 @@ export interface components {
             phone?: string;
             is_active?: boolean;
         };
+        /**
+         * @description * `email_verify` - Verificación de email
+         *     * `step_up` - Step-up de acción sensible
+         *     * `account_unlock` - Desbloqueo de cuenta
+         *     * `email_change` - Cambio de email
+         *     * `reenrollment` - Re-enrolamiento biométrico
+         * @enum {string}
+         */
+        PurposeEnum: "email_verify" | "step_up" | "account_unlock" | "email_change" | "reenrollment";
         RegisterRequestRequest: {
             app_id: string;
             first_name: string;
@@ -563,6 +651,8 @@ export interface components {
             phone: string;
             /** Format: binary */
             video: string;
+            /** @description Código OTP de 6 dígitos (purpose=email_verify). Se consume en este request. */
+            otp_code: string;
             /** Format: uri */
             redirect_uri?: string | null;
         };
@@ -588,6 +678,8 @@ export interface components {
             email: string;
             phone?: string;
             is_active?: boolean;
+            /** Format: date-time */
+            readonly email_verified_at: string | null;
             /** Format: date-time */
             readonly last_login_at: string | null;
             /** Format: date-time */
@@ -1193,7 +1285,7 @@ export interface operations {
                     "application/json": components["schemas"]["RegisterResponse"];
                 };
             };
-            /** @description Request inválido / app inactiva / video inválido / redirect inválida */
+            /** @description OTP ausente / inválido / app inactiva */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -1347,6 +1439,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    v1_otp_request_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OtpRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtpRequestResponse"];
+                };
+            };
+            /** @description App inactiva / canal no soportado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Application no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limit de emisión */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Fallo de entrega del canal */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_otp_verify_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OtpVerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtpVerifyResponse"];
+                };
+            };
+            /** @description Código inválido / expirado / bloqueado / ya usado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Application no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

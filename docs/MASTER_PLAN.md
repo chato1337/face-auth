@@ -6,7 +6,7 @@
 >
 > Diseño de referencia: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (estructura de carpetas, modelos de datos, especificación del pipeline).
 
-**Estado global del proyecto:** 🟡 Fases 6 y 7 implementadas — pendiente revisión manual del panel admin y prueba manual del flujo dashcam con cámara real.
+**Estado global del proyecto:** 🟡 Fases 6–8 y **Fase 9 (OTP)** implementadas — pendiente `migrate` local, revisión manual del panel admin y prueba del registro con correo (console backend en dev).
 
 ---
 
@@ -253,6 +253,23 @@
 
 ---
 
+## Fase 9 — Capa OTP (prevención de account takeover)
+
+**Objetivo:** verificar posesión del email antes de persistir el enrolamiento biométrico. Diseño: [`docs/OTP_VALIDATION.md`](docs/OTP_VALIDATION.md). Guía para features futuros: [`docs/OTP_FEATURE_GUIDE.md`](docs/OTP_FEATURE_GUIDE.md). Conclusiones por fase: [`docs/OTP_IMPLEMENTATION.md`](docs/OTP_IMPLEMENTATION.md).
+
+- [x] App `apps.otp`: `OtpChallenge`, hasher HMAC, `SmtpEmailChannel`, registry de canales, settings `OTP_*` / `EMAIL_*` (console en dev).
+- [x] `OtpService.issue/verify/consume`: 6 dígitos, TTL 5 min, 3 emisiones / 5 min, 5 intentos de verify, invalidación del código anterior, `verify` no consume.
+- [x] `POST /api/v1/otp/request/` y `POST /api/v1/otp/verify/`; `email_verify` crea `TenantUser` pendiente (`is_active=False`).
+- [x] Registro exige `otp_code`; consume **después** del pipeline biométrico OK; setea `email_verified_at` y activa el usuario.
+- [x] Frontend: paso OTP reutilizable (`OtpChallengeForm`) entre formulario y dashcam; `otp_code` en el `FormData` de register.
+- [x] OpenAPI tag `otp`, `schema.json` y tipos TS regenerados.
+
+**Criterio de aceptación:** no se puede completar `POST /auth/register/` sin un OTP vigente del mismo email; un video rechazado por liveness no quema el código; un cuarto `request` en 5 min responde 429.
+
+**Fuera de alcance:** bloqueo por suplantación (`purpose=account_unlock`), SMS/WhatsApp, OTP de operadores admin.
+
+---
+
 ## Registro de decisiones pendientes (a resolver antes/durante Fase 2-3)
 
 - [x] Mecanismo exacto de "authorization code" para el SSO → **JWT de un solo uso** (`SSORedirectToken`, `purpose=sso_redirect`) + access/refresh. OAuth2 code-exchange como evolución.
@@ -265,4 +282,4 @@
 
 ## Próximo paso
 
-Fase 7 (captura pasiva "Dashcam") implementada end-to-end en el frontend; falta **prueba manual con cámara real** (calibración de umbrales EAR/alineación y Safari/iOS). Fase 6 sigue pendiente de revisión manual del panel (`/admin/login` + API `/api/v1/admin/`).
+Aplicar migraciones `otp.0001_initial` y `accounts.0002_add_email_verified_at` (`pipenv run python manage.py migrate`) con Postgres arriba. Probar el registro: el código OTP sale en la consola del backend (`EMAIL_BACKEND` console en dev). Fase 7 sigue pendiente de prueba manual con cámara real.

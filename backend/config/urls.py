@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/v1/health/", HealthView.as_view(), name="health"),
     path("api/v1/", include("apps.tenants.urls")),
     path("api/v1/auth/", include("apps.authentication.urls")),
+    path("api/v1/otp/", include("apps.otp.urls")),
     # Panel admin (operadores is_superuser) — no requiere X-App-Id
     path("api/v1/admin/auth/", include("apps.authentication.admin_urls")),
     path("api/v1/admin/", include("apps.tenants.admin_urls")),

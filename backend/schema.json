@@ -1064,7 +1064,7 @@
         "/api/v1/auth/register/": {
             "post": {
                 "operationId": "v1_auth_register_create",
-                "description": "Flujo B: valida liveness, extrae embedding y crea TenantUser. En error el cliente debe conservar el formulario y solo reintentar el video.",
+                "description": "Flujo B: exige otp_code (email_verify ya solicitado), valida liveness, extrae embedding y activa el TenantUser pendiente. En error el cliente debe conservar el formulario y solo reintentar el video.",
                 "summary": "Registro biométrico",
                 "tags": [
                     "auth"
@@ -1105,13 +1105,21 @@
                                     "$ref": "#/components/schemas/ErrorResponse"
                                 },
                                 "examples": {
-                                    "VideoInválido": {
+                                    "OTPNoSolicitado": {
                                         "value": {
-                                            "code": "invalid_video",
-                                            "message": "No se pudo abrir el video.",
-                                            "field": "video"
+                                            "code": "otp_not_found",
+                                            "message": "Solicita un código de verificación antes de registrarte.",
+                                            "field": "otp_code"
                                         },
-                                        "summary": "Video inválido"
+                                        "summary": "OTP no solicitado"
+                                    },
+                                    "OTPInválidoEnRegistro": {
+                                        "value": {
+                                            "code": "otp_invalid",
+                                            "message": "Código incorrecto.",
+                                            "field": "code"
+                                        },
+                                        "summary": "OTP inválido en registro"
                                     },
                                     "ApplicationInactiva": {
                                         "value": {
@@ -1132,7 +1140,7 @@
                                 }
                             }
                         },
-                        "description": "Request inválido / app inactiva / video inválido / redirect inválida"
+                        "description": "OTP ausente / inválido / app inactiva"
                     },
                     "404": {
                         "content": {
@@ -1442,6 +1450,194 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/otp/request/": {
+            "post": {
+                "operationId": "v1_otp_request_create",
+                "description": "Emite un código de 6 dígitos al canal indicado (email en v1). Con purpose=email_verify crea un TenantUser pendiente si no existe. Cada emisión invalida el código anterior del mismo usuario y purpose. Máximo 3 códigos cada 5 minutos por usuario.",
+                "summary": "Solicitar código OTP",
+                "tags": [
+                    "otp"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OtpRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OtpRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OtpRequestResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "App inactiva / canal no soportado"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Application no encontrada"
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "RateLimitDeEmisión": {
+                                        "value": {
+                                            "code": "otp_rate_limited",
+                                            "message": "Demasiados códigos solicitados. Intenta de nuevo en unos minutos.",
+                                            "field": null
+                                        },
+                                        "summary": "Rate limit de emisión"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Rate limit de emisión"
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Fallo de entrega del canal"
+                    }
+                }
+            }
+        },
+        "/api/v1/otp/verify/": {
+            "post": {
+                "operationId": "v1_otp_verify_create",
+                "description": "Comprueba el código para la UI. No lo marca como usado: el consumidor (p. ej. registro) debe enviar otp_code de nuevo y llamar consume().",
+                "summary": "Validar código OTP (no consume)",
+                "tags": [
+                    "otp"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OtpVerifyRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OtpVerifyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OtpVerifyResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "CódigoIncorrecto": {
+                                        "value": {
+                                            "code": "otp_invalid",
+                                            "message": "Código incorrecto.",
+                                            "field": "code"
+                                        },
+                                        "summary": "Código incorrecto"
+                                    },
+                                    "CódigoExpirado": {
+                                        "value": {
+                                            "code": "otp_expired",
+                                            "message": "El código expiró. Solicita uno nuevo.",
+                                            "field": null
+                                        },
+                                        "summary": "Código expirado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Código inválido / expirado / bloqueado / ya usado"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "ApplicationNoEncontrada": {
+                                        "value": {
+                                            "code": "app_not_found",
+                                            "message": "Application no encontrada.",
+                                            "field": "app_id"
+                                        },
+                                        "summary": "Application no encontrada"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Application no encontrada"
                     }
                 }
             }
@@ -1850,6 +2046,15 @@
                     "user_id"
                 ]
             },
+            "ChannelEnum": {
+                "enum": [
+                    "email",
+                    "sms",
+                    "whatsapp"
+                ],
+                "type": "string",
+                "description": "* `email` - Email\n* `sms` - SMS\n* `whatsapp` - WhatsApp"
+            },
             "ErrorResponse": {
                 "type": "object",
                 "properties": {
@@ -1965,6 +2170,118 @@
                 ],
                 "type": "string",
                 "description": "* `buffalo_s` - InsightFace buffalo_s\n* `mobilefacenet` - MobileFaceNet"
+            },
+            "OtpRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "app_id": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "purpose": {
+                        "$ref": "#/components/schemas/PurposeEnum"
+                    },
+                    "channel": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ChannelEnum"
+                            }
+                        ],
+                        "default": "email"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "minLength": 1
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 100
+                    },
+                    "phone": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 30
+                    }
+                },
+                "required": [
+                    "app_id",
+                    "email",
+                    "purpose"
+                ]
+            },
+            "OtpRequestResponse": {
+                "type": "object",
+                "properties": {
+                    "challenge_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "expires_in": {
+                        "type": "integer"
+                    },
+                    "destination_masked": {
+                        "type": "string"
+                    },
+                    "channel": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "challenge_id",
+                    "channel",
+                    "destination_masked",
+                    "expires_in"
+                ]
+            },
+            "OtpVerifyRequest": {
+                "type": "object",
+                "properties": {
+                    "app_id": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "purpose": {
+                        "$ref": "#/components/schemas/PurposeEnum"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "minLength": 1
+                    },
+                    "code": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^\\d{6}$"
+                    }
+                },
+                "required": [
+                    "app_id",
+                    "code",
+                    "email",
+                    "purpose"
+                ]
+            },
+            "OtpVerifyResponse": {
+                "type": "object",
+                "properties": {
+                    "valid": {
+                        "type": "boolean"
+                    },
+                    "expires_in": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "expires_in",
+                    "valid"
+                ]
             },
             "PaginatedApplicationAdminList": {
                 "type": "object",
@@ -2093,6 +2410,17 @@
                     }
                 }
             },
+            "PurposeEnum": {
+                "enum": [
+                    "email_verify",
+                    "step_up",
+                    "account_unlock",
+                    "email_change",
+                    "reenrollment"
+                ],
+                "type": "string",
+                "description": "* `email_verify` - Verificación de email\n* `step_up` - Step-up de acción sensible\n* `account_unlock` - Desbloqueo de cuenta\n* `email_change` - Cambio de email\n* `reenrollment` - Re-enrolamiento biométrico"
+            },
             "RegisterRequestRequest": {
                 "type": "object",
                 "properties": {
@@ -2124,6 +2452,12 @@
                         "type": "string",
                         "format": "binary"
                     },
+                    "otp_code": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Código OTP de 6 dígitos (purpose=email_verify). Se consume en este request.",
+                        "pattern": "^\\d{6}$"
+                    },
                     "redirect_uri": {
                         "type": "string",
                         "format": "uri",
@@ -2136,6 +2470,7 @@
                     "email",
                     "first_name",
                     "last_name",
+                    "otp_code",
                     "video"
                 ]
             },
@@ -2209,6 +2544,12 @@
                     "is_active": {
                         "type": "boolean"
                     },
+                    "email_verified_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "last_login_at": {
                         "type": "string",
                         "format": "date-time",
@@ -2235,6 +2576,7 @@
                     "app_id",
                     "created_at",
                     "email",
+                    "email_verified_at",
                     "first_name",
                     "id",
                     "last_login_at",
@@ -2368,6 +2710,10 @@
         {
             "name": "auth",
             "description": "Login / registro biométrico y refresh de tokens."
+        },
+        {
+            "name": "otp",
+            "description": "Emisión y verificación de códigos de un solo uso (ATO)."
         },
         {
             "name": "admin",

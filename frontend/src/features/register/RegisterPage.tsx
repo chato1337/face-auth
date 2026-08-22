@@ -5,9 +5,11 @@ import { z } from "zod"
 import { AlertCircle, CheckCircle2 } from "lucide-react"
 
 import { ApiError } from "@/api/client"
+import { useOtpRequest, useOtpVerify } from "@/api/hooks/useOtp"
 import { useRegister } from "@/api/hooks/useRegister"
 import { DashcamCapture } from "@/components/camera/DashcamCapture"
 import { AuthNavLink, AuthShell } from "@/components/layout/AuthShell"
+import { OtpChallengeForm } from "@/components/otp/OtpChallengeForm"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -29,14 +31,21 @@ const registerSchema = z.object({
 })
 
 type RegisterFormValues = z.infer<typeof registerSchema>
+type WizardStep = "form" | "otp" | "camera"
 
 export function RegisterPage() {
   const { appId, redirectUri } = useTenant()
   const registerMutation = useRegister()
-  const [step, setStep] = useState<"form" | "camera">("form")
+  const otpRequest = useOtpRequest()
+  const otpVerify = useOtpVerify()
+  const [step, setStep] = useState<WizardStep>("form")
   const [apiError, setApiError] = useState<string | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
+  const [otpError, setOtpError] = useState<string | null>(null)
   const [doneLocal, setDoneLocal] = useState(false)
+  const [destinationMasked, setDestinationMasked] = useState("")
+  const [expiresIn, setExpiresIn] = useState(300)
+  const [otpCode, setOtpCode] = useState("")
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -48,6 +57,58 @@ export function RegisterPage() {
     },
     mode: "onBlur",
   })
+
+  async function requestOtp() {
+    setApiError(null)
+    setFieldError(null)
+    setOtpError(null)
+    const values = form.getValues()
+    try {
+      const result = await otpRequest.mutateAsync({
+        appId,
+        purpose: "email_verify",
+        email: values.email.trim(),
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        phone: values.phone?.trim() || "",
+      })
+      setDestinationMasked(result.destination_masked)
+      setExpiresIn(result.expires_in)
+      setOtpCode("")
+      setStep("otp")
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setApiError(err.message)
+        if (err.field === "email") {
+          setFieldError(err.message)
+          form.setError("email", { message: err.message })
+        }
+      } else {
+        setApiError("No se pudo enviar el código. Inténtalo de nuevo.")
+      }
+    }
+  }
+
+  async function verifyOtp(code: string) {
+    setOtpError(null)
+    const email = form.getValues("email").trim()
+    try {
+      await otpVerify.mutateAsync({
+        appId,
+        purpose: "email_verify",
+        email,
+        code,
+      })
+      setOtpCode(code)
+      setStep("camera")
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setOtpError(err.message)
+      } else {
+        setOtpError("No se pudo validar el código.")
+      }
+    }
+  }
 
   async function onCapture(video: Blob) {
     setApiError(null)
@@ -62,6 +123,7 @@ export function RegisterPage() {
         email: values.email.trim(),
         phone: values.phone?.trim() || "",
         video,
+        otpCode,
         redirectUri,
       })
       const outcome = handleAuthSuccess(result.tokens)
@@ -70,13 +132,17 @@ export function RegisterPage() {
         setStep("form")
       }
     } catch (err) {
-      // Regla crítica UX: conservar formulario; solo limpiar video (no guardamos blob).
       if (err instanceof ApiError) {
         setApiError(err.message)
         if (err.field === "email") {
           setFieldError(err.message)
           form.setError("email", { message: err.message })
           setStep("form")
+          return
+        }
+        if (err.field === "otp_code" || err.field === "code" || err.code.startsWith("otp_")) {
+          setOtpError(err.message)
+          setStep("otp")
           return
         }
       } else {
@@ -109,14 +175,14 @@ export function RegisterPage() {
   return (
     <AuthShell
       title="Crear cuenta"
-      subtitle="Completa tus datos y registra tu rostro. Si falla la captura, tus datos se conservan."
+      subtitle="Completa tus datos, verifica tu correo y registra tu rostro."
       footer={
         <>
           ¿Ya tienes cuenta? <AuthNavLink to="/login">Iniciar sesión</AuthNavLink>
         </>
       }
     >
-      {apiError && (
+      {apiError && step !== "otp" && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle />
           <AlertTitle>No se pudo registrar</AlertTitle>
@@ -136,21 +202,30 @@ export function RegisterPage() {
           </p>
         </div>
       ) : step === "camera" ? (
-        // Ante un rechazo del backend (salvo email duplicado), se vuelve a
-        // esta rama y DashcamCapture reinicia la detección automáticamente,
-        // conservando los datos del formulario.
         <DashcamCapture
           onCapture={(blob) => void onCapture(blob)}
-          onCancel={() => setStep("form")}
+          onCancel={() => setStep("otp")}
           disabled={registerMutation.isPending}
+        />
+      ) : step === "otp" ? (
+        <OtpChallengeForm
+          destinationMasked={destinationMasked}
+          expiresIn={expiresIn}
+          isVerifying={otpVerify.isPending}
+          isResending={otpRequest.isPending}
+          error={otpError}
+          onSubmit={(code) => void verifyOtp(code)}
+          onResend={() => void requestOtp()}
+          onBack={() => {
+            setOtpError(null)
+            setStep("form")
+          }}
         />
       ) : (
         <form
           className="flex flex-col gap-5"
           onSubmit={form.handleSubmit(() => {
-            setApiError(null)
-            setFieldError(null)
-            setStep("camera")
+            void requestOtp()
           })}
           noValidate
         >
@@ -212,8 +287,9 @@ export function RegisterPage() {
             type="submit"
             size="lg"
             className="h-11 w-full bg-teal-900 text-teal-50 hover:bg-teal-800"
+            disabled={otpRequest.isPending}
           >
-            Registro biométrico
+            {otpRequest.isPending ? "Enviando código…" : "Enviar código de verificación"}
           </Button>
         </form>
       )}

@@ -38,3 +38,13 @@ class AppIdScopedRateThrottle(SimpleRateThrottle):
         if header:
             return str(header).strip()
         return None
+
+
+class OtpIssueRateThrottle(AppIdScopedRateThrottle):
+    """Cortesía por IP + app_id. El tope real 3/5 min vive en OtpService (por usuario)."""
+
+    scope = "otp_issue"
+
+
+class OtpVerifyRateThrottle(AppIdScopedRateThrottle):
+    scope = "otp_verify"
