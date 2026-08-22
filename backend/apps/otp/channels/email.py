@@ -45,7 +45,15 @@ class SmtpEmailChannel:
         try:
             message.send(fail_silently=False)
         except Exception:
-            logger.exception("OTP email delivery failed purpose=%s", purpose)
+            logger.exception(
+                "OTP email delivery failed purpose=%s host=%s port=%s tls=%s ssl=%s timeout=%s",
+                purpose,
+                settings.EMAIL_HOST,
+                settings.EMAIL_PORT,
+                settings.EMAIL_USE_TLS,
+                settings.EMAIL_USE_SSL,
+                getattr(settings, "EMAIL_TIMEOUT", None),
+            )
             raise OtpDeliveryFailedError(
                 "No se pudo entregar el código. Intenta de nuevo en unos minutos.",
             ) from None
