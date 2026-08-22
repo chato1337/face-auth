@@ -105,16 +105,33 @@ class FakeMediaRecorder {
   }
 }
 
-function installFakeCamera() {
+function videoInputs(count: number): MediaDeviceInfo[] {
+  return Array.from({ length: count }, (_, index) => ({
+    kind: "videoinput",
+    deviceId: `cam-${index}`,
+    label: `Camera ${index}`,
+    groupId: "",
+    toJSON() {
+      return this
+    },
+  })) as MediaDeviceInfo[]
+}
+
+function installFakeCamera(options: { videoInputCount?: number } = {}) {
   const track = { stop: vi.fn() }
   const stream = {
     getTracks: () => [track],
     getVideoTracks: () => [track],
   } as unknown as MediaStream
 
+  const getUserMedia = vi.fn().mockResolvedValue(stream)
+  const enumerateDevices = vi
+    .fn()
+    .mockResolvedValue(videoInputs(options.videoInputCount ?? 1))
+
   Object.defineProperty(navigator, "mediaDevices", {
     configurable: true,
-    value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+    value: { getUserMedia, enumerateDevices },
   })
   HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
   Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
@@ -131,7 +148,7 @@ function installFakeCamera() {
   })
   vi.stubGlobal("MediaRecorder", FakeMediaRecorder)
 
-  return { track }
+  return { track, getUserMedia, stream }
 }
 
 afterEach(() => {
@@ -237,5 +254,53 @@ describe("DashcamCapture", () => {
     expect(blob.size).toBeGreaterThan(0)
     // La cámara se apaga tras entregar el clip.
     expect(track.stop).toHaveBeenCalled()
+  })
+
+  it("no muestra Alternar Cámara si hay una sola videoinput", async () => {
+    installFakeCamera({ videoInputCount: 1 })
+    mockUseFaceLandmarker.mockReturnValue(
+      landmarkerHookValue({ status: "ready", landmarker: fakeLandmarker([[]]) }),
+    )
+
+    render(<DashcamCapture onCapture={vi.fn()} />)
+
+    expect(await screen.findByText(/buscando tu rostro/i)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /alternar cámara/i })).not.toBeInTheDocument()
+  })
+
+  it("muestra Alternar Cámara solo con 2 o más videoinput", async () => {
+    installFakeCamera({ videoInputCount: 2 })
+    mockUseFaceLandmarker.mockReturnValue(
+      landmarkerHookValue({ status: "ready", landmarker: fakeLandmarker([[]]) }),
+    )
+
+    render(<DashcamCapture onCapture={vi.fn()} />)
+
+    expect(
+      await screen.findByRole("button", { name: /alternar cámara/i }),
+    ).toBeInTheDocument()
+  })
+
+  it("al alternar libera las pistas y pide el facingMode opuesto", async () => {
+    const { track, getUserMedia } = installFakeCamera({ videoInputCount: 2 })
+    mockUseFaceLandmarker.mockReturnValue(
+      landmarkerHookValue({ status: "ready", landmarker: fakeLandmarker([[]]) }),
+    )
+    const user = userEvent.setup()
+
+    render(<DashcamCapture onCapture={vi.fn()} />)
+
+    await user.click(await screen.findByRole("button", { name: /alternar cámara/i }))
+
+    await waitFor(() => expect(track.stop).toHaveBeenCalled())
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2))
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+      },
+    })
   })
 })

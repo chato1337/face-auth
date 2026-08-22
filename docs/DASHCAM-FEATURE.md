@@ -32,21 +32,69 @@ Entrégame esto primero para revisarlo. Una vez aprobado, te pediré que unas to
 
 ## Estado de implementación — conclusiones (2026-07-30)
 
-**Implementado y verificado** (tests: 23 en verde; `tsc`, `oxlint` y build de producción sin errores). Detalle por fase en [`MASTER_PLAN.md` §Fase 7](MASTER_PLAN.md).
+**Implementado y verificado** (tests: 30 en verde; `tsc`, `oxlint` y build de producción sin errores). Detalle por fase en [`MASTER_PLAN.md` §Fase 7](MASTER_PLAN.md).
 
 **Qué se construyó** (todo en `frontend/src/components/camera/`):
 
 | Pieza | Archivo | Decisión clave |
 |---|---|---|
 | Hook MediaPipe | `useFaceLandmarker.ts` | Singleton de sesión (no re-inicializa en cada reintento), fallback GPU→CPU, import dinámico (chunk lazy ~153 kB), assets por CDN pinneado a `@mediapipe/tasks-vision@1.0.0`. |
-| Lógica EAR/parpadeo/alineación | `faceMetrics.ts` | EAR clásico con corrección de aspect ratio; máquina de estados con histéresis (0.20/0.25) y mínimo 2 frames cerrados; dispara al **reabrir** los ojos para que el clip contenga el ciclo completo. Alineación por bounding box con hints (`céntrate`/`acércate`/`aléjate`). |
-| Hook grabación | `useDashcamRecorder.ts` | Un Blob de `MediaRecorder` no se puede recortar en cliente → **segmentos rotativos** (rota cada 4 s, mínimo 2 s al cortar): clips siempre de 2–4 s, dentro del rango 1–6 s del backend. |
-| Componente | `DashcamCapture.tsx` | Loop `requestAnimationFrame` + `detectForVideo`; 6 frames alineados arman la grabación, 12 frames sin rostro la desarman; parpadeo → `stopAndCollect` → `onCapture(blob)` y cámara apagada. |
+| Lógica EAR/parpadeo/alineación | `faceMetrics.ts` | EAR clásico con corrección de aspect ratio; máquina de estados con histéresis (0.20/0.25) y mínimo 2 frames cerrados; dispara al **reabrir** los ojos para que el clip contenga el ciclo completo. Alineación por bounding box con hints (`céntrate`/`acércate`/`alékate`). |
+| Utilidades de cámara | `videoRecorder.ts` | `requestCameraStream(facingMode)` (`"user"` por defecto), `countVideoInputDevices()` (`enumerateDevices` + filtro `videoinput`) y `oppositeFacingMode`. |
+| Hook grabación | `useDashcamRecorder.ts` | Un Blob de `MediaRecorder` no se puede recortar en cliente → **segmentos rotativos** (rota cada 4 s, mínimo 2 s al cortar): clips siempre de 2–4 s, dentro del rango 1–6 s del backend. Posee el stream, `facingMode` y `canToggleCamera`; `switchCamera` libera pistas y pide el `facingMode` opuesto. |
+| Componente | `DashcamCapture.tsx` | Loop `requestAnimationFrame` + `detectForVideo`; 6 frames alineados arman la grabación, 12 frames sin rostro la desarman; parpadeo → `stopAndCollect` → `onCapture(blob)` y cámara apagada. El CTA **Alternar Cámara** solo se renderiza si `canToggleCamera`. |
 
-**Integración:** `LoginPage` y `RegisterPage` usan `DashcamCapture` (las mutaciones `useLogin`/`useRegister` y el contrato HTTP no cambiaron). Ante rechazo del backend, la página muestra la alerta con el motivo y el componente se re-monta reiniciando la detección sin recargar; el formulario de registro conserva sus datos (email duplicado sigue regresando al formulario). `CameraCapture` (captura manual) se conserva como fallback.
+**Integración:** `LoginPage` y `RegisterPage` usan `DashcamCapture` (las mutaciones `useLogin`/`useRegister` y el contrato HTTP no cambiaron). Ante rechazo del backend, la página muestra la alerta con el motivo y el componente se re-monta reiniciando la detección sin recargar; el formulario de registro conserva sus datos (email duplicado sigue regresando al formulario). `CameraCapture` (captura manual) se conserva como fallback y **no** incluye el toggle (el flujo activo es la dashcam).
 
 **Seguridad:** sin cambios en el modelo Zero-Trust — MediaPipe en el cliente solo decide *cuándo* cortar; el backend sigue validando liveness activo/pasivo y matching.
 
 **Límites conocidos / pendiente manual:**
 - Si el parpadeo coincide con la rotación de segmento, el clip puede no contener el ciclo completo → el backend lo rechaza por liveness y el flujo se reinicia solo (costo: un reintento).
-- Falta calibración con cámara real (umbrales de EAR/alineación con distintos rostros e iluminación) y verificación en Safari/iOS (códecs de `MediaRecorder`). Los umbrales son opciones configurables, sin refactor.
+- Falta calibración con cámara real (umbrales de EAR/alineación con distintos rostros e iluminación) y verificación en Safari/iOS (códecs de `MediaRecorder`, y el toggle frontal/trasera). Los umbrales son opciones configurables, sin refactor.
+
+---
+
+## Alternar cámara (frontal / trasera) — conclusiones (2026-08-22)
+
+El CTA **no** forma parte del trigger de captura (el parpadeo sigue siendo el único disparo). Es un control de hardware opcional: si el dispositivo no tiene dos cámaras físicas, el botón **no se monta**.
+
+### Decisión de capas (mismo patrón que Fase 7)
+
+| Responsabilidad | Dónde | Por qué |
+|---|---|---|
+| Contar `videoinput` y pedir stream con `facingMode` | `videoRecorder.ts` | Funciones puras, testeables sin React; `CameraCapture` reutiliza `requestCameraStream("user")` sin cambios. |
+| Estado `facingMode` / `canToggleCamera` y `switchCamera` | `useDashcamRecorder.ts` | El hook **posee** el `MediaStream` (el mismo objeto que `<video>.srcObject`). Si el componente parara pistas por su cuenta sin actualizar el hook, `MediaRecorder` seguiría ligado al stream muerto. |
+| Renderizado condicional del botón | `DashcamCapture.tsx` | Al clic: detiene las pistas de video del `srcObject` del `<video>`, delega en `switchCamera` y el `useEffect` existente reasigna el stream nuevo al mismo elemento. |
+
+### Detección de hardware
+
+`countVideoInputDevices()` llama a `navigator.mediaDevices.enumerateDevices()` y cuenta `kind === "videoinput"`. `canToggleCamera` es `true` **solo** si el recuento es ≥ 2.
+
+Hay que consultar **dos veces**:
+
+1. **Al montar el hook** — cumple el requisito de detectar al entrar en la vista.
+2. **Tras un `getUserMedia` exitoso** — Chrome/Safari suelen devolver 0–1 entradas (a menudo con `deviceId` vacío) *antes* del permiso. Sin la reconsulta, el botón nunca aparecería en móviles reales.
+
+Si `enumerateDevices` no existe o lanza, el recuento es 0 → botón oculto. No se escucha `devicechange` (hotplug): un remount (reintento / rechazo del backend) vuelve a contar.
+
+### Lógica de alternancia
+
+- `facingMode` arranca en `"user"` (frontal). `requestCameraStream` usa `{ facingMode: { ideal } }` (no `exact`): no falla en escritorio sin cámara “trasera” etiquetada.
+- Al clic, con la cámara ya activa:
+  1. Se recuperan las pistas de video del `srcObject` del `<video>` y se ejecuta `.stop()` (libera el hardware; en un dispositivo típico no se pueden abrir frontal y trasera a la vez).
+  2. El hook descarta la grabación en curso (`teardownSegment`), anula el stream y pide `getUserMedia` con el `facingMode` opuesto (`"environment"` ↔ `"user"`).
+  3. El stream nuevo se asigna al **mismo** `<video>` (no se recrea el elemento). El loop de detección depende de `recorder.stream`: al cambiar la identidad del stream, se reinicia en fase `detecting`.
+- El preview frontal sigue con `scale-x-[-1]` (selfie); el trasero no se espeja.
+- El botón no se renderiza en fase `capturing` (evitar cortar el clip en el `stopAndCollect`). Durante el cambio, `stream === null` muestra “Encendiendo la cámara…”.
+- Si el `facingMode` nuevo falla, el hook deja `error` y el CTA **Reintentar** vuelve a `startCamera` con el `facingMode` que sí funcionó (no se flippea el estado hasta el éxito).
+
+### Tests útiles
+
+- `videoRecorder.test.ts`: `countVideoInputDevices` ignora `audioinput`/`audiooutput`; `oppositeFacingMode`.
+- `DashcamCapture.test.tsx`: el botón **no** aparece con 1 `videoinput`; sí con 2; el clic hace `.stop()` en las pistas y el segundo `getUserMedia` usa `{ facingMode: { ideal: "environment" } }`.
+
+### Límites del toggle (verificar en dispositivo real)
+
+- **`facingMode` no es `deviceId`.** En un portátil con webcam integrada + USB, ambos suelen ser `"user"`: el recuento ≥ 2 muestra el botón, pero `ideal: "environment"` puede devolver la misma cámara. En móvil (frontal/trasera) es el caso que importa y donde `facingMode` sí cambia de sensor.
+- Hay que **parar las pistas viejas antes** del segundo `getUserMedia`; si no, iOS/Android a menudo ignoran el cambio o lanzan `NotReadableError`.
+- Safari/iOS: confirmar que `enumerateDevices` post-permiso reporta 2 `videoinput` y que el LED/sensor cambia de verdad al pulsar el CTA.

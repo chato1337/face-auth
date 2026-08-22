@@ -17,9 +17,12 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import {
   CameraError,
+  countVideoInputDevices,
+  oppositeFacingMode,
   pickMimeType,
   requestCameraStream,
   stopStream,
+  type CameraFacingMode,
 } from "@/components/camera/videoRecorder"
 
 export const DASHCAM_RECORDING = {
@@ -44,10 +47,22 @@ export type UseDashcamRecorderResult = {
   stream: MediaStream | null
   status: DashcamRecorderStatus
   error: CameraError | null
+  /** `"user"` (frontal) por defecto; `"environment"` tras alternar a la trasera. */
+  facingMode: CameraFacingMode
+  /**
+   * Visibilidad del control de alternar cámara: `true` solo si hay ≥2
+   * dispositivos `videoinput` (reconsulta tras encender la cámara).
+   */
+  canToggleCamera: boolean
   /** Pide permiso y enciende la cámara. */
   startCamera: () => Promise<void>
   /** Apaga la cámara (descarta cualquier grabación en curso). */
   stopCamera: () => void
+  /**
+   * Libera las pistas de video del stream activo (el mismo objeto que
+   * `<video>.srcObject`) y pide un nuevo stream con el `facingMode` opuesto.
+   */
+  switchCamera: () => Promise<void>
   /** Arranca la grabación en espera (rostro alineado). Requiere cámara encendida. */
   startRecording: () => void
   /**
@@ -88,6 +103,11 @@ export function useDashcamRecorder(
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [status, setStatus] = useState<DashcamRecorderStatus>("idle")
   const [error, setError] = useState<CameraError | null>(null)
+  const [facingMode, setFacingMode] = useState<CameraFacingMode>("user")
+  const [canToggleCamera, setCanToggleCamera] = useState(false)
+  const facingModeRef = useRef<CameraFacingMode>("user")
+  facingModeRef.current = facingMode
+  const switchingRef = useRef(false)
 
   const clearRotationTimer = useCallback(() => {
     if (rotationTimerRef.current !== null) {
@@ -137,32 +157,71 @@ export function useDashcamRecorder(
     }, configRef.current.maxSegmentMs)
   }, [teardownSegment])
 
-  const startCamera = useCallback(async () => {
-    if (streamRef.current) return
-    const session = ++cameraSessionRef.current
-    setError(null)
-    setStatus("starting_camera")
-    try {
-      const mediaStream = await requestCameraStream()
-      if (session !== cameraSessionRef.current || streamRef.current) {
-        // Llegó tarde: liberar este stream para no dejar el LED encendido.
-        stopStream(mediaStream)
-        return
-      }
-      streamRef.current = mediaStream
-      setStream(mediaStream)
-      setStatus("camera_ready")
-    } catch (err) {
-      if (session !== cameraSessionRef.current) return
-      const cameraError =
-        err instanceof CameraError
-          ? err
-          : new CameraError("unknown", "No se pudo iniciar la cámara.")
-      setError(cameraError)
-      setStatus("error")
-      throw cameraError
-    }
+  const refreshCanToggleCamera = useCallback(async () => {
+    const session = cameraSessionRef.current
+    const count = await countVideoInputDevices()
+    if (session !== cameraSessionRef.current) return
+    setCanToggleCamera(count >= 2)
   }, [])
+
+  const startCamera = useCallback(
+    async (nextFacingMode?: CameraFacingMode) => {
+      if (streamRef.current) return
+      const session = ++cameraSessionRef.current
+      const mode = nextFacingMode ?? facingModeRef.current
+      setError(null)
+      setStatus("starting_camera")
+      try {
+        const mediaStream = await requestCameraStream(mode)
+        if (session !== cameraSessionRef.current || streamRef.current) {
+          // Llegó tarde: liberar este stream para no dejar el LED encendido.
+          stopStream(mediaStream)
+          return
+        }
+        streamRef.current = mediaStream
+        facingModeRef.current = mode
+        setFacingMode(mode)
+        setStream(mediaStream)
+        setStatus("camera_ready")
+        void refreshCanToggleCamera()
+      } catch (err) {
+        if (session !== cameraSessionRef.current) return
+        const cameraError =
+          err instanceof CameraError
+            ? err
+            : new CameraError("unknown", "No se pudo iniciar la cámara.")
+        setError(cameraError)
+        setStatus("error")
+        throw cameraError
+      }
+    },
+    [refreshCanToggleCamera],
+  )
+
+  const switchCamera = useCallback(async () => {
+    if (switchingRef.current) return
+    const currentStream = streamRef.current
+    if (!currentStream) return
+
+    switchingRef.current = true
+    collectingRef.current = false
+    teardownSegment()
+
+    // Liberar la cámara actual: pistas de video del stream ligado a `<video>.srcObject`.
+    currentStream.getVideoTracks().forEach((track) => track.stop())
+    stopStream(currentStream)
+    streamRef.current = null
+    setStream(null)
+
+    const nextFacing = oppositeFacingMode(facingModeRef.current)
+    try {
+      await startCamera(nextFacing)
+    } catch {
+      // startCamera ya dejó error/status; el CTA de reintentar reutiliza startCamera.
+    } finally {
+      switchingRef.current = false
+    }
+  }, [startCamera, teardownSegment])
 
   const discardRecording = useCallback(() => {
     if (!segmentRef.current) return
@@ -256,6 +315,17 @@ export function useDashcamRecorder(
     })
   }, [clearRotationTimer])
 
+  // Recuento inicial al montar; tras getUserMedia se reconsulta (lista real).
+  useEffect(() => {
+    let cancelled = false
+    void countVideoInputDevices().then((count) => {
+      if (!cancelled) setCanToggleCamera(count >= 2)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
     return () => {
       // Cleanup directo (sin depender de callbacks memoizados) al desmontar.
@@ -277,8 +347,11 @@ export function useDashcamRecorder(
     stream,
     status,
     error,
+    facingMode,
+    canToggleCamera,
     startCamera,
     stopCamera,
+    switchCamera,
     startRecording,
     stopAndCollect,
     discardRecording,

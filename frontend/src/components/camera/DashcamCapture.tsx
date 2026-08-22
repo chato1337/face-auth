@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { RefreshCw, ScanFace } from "lucide-react"
+import { RefreshCw, ScanFace, SwitchCamera } from "lucide-react"
 
 import {
   averageEyeAspectRatio,
@@ -65,8 +65,16 @@ export function DashcamCapture({
 
   const landmarkerState = useFaceLandmarker()
   const recorder = useDashcamRecorder()
-  const { startCamera, startRecording, stopAndCollect, discardRecording, stopCamera } =
-    recorder
+  const {
+    startCamera,
+    startRecording,
+    stopAndCollect,
+    discardRecording,
+    stopCamera,
+    switchCamera,
+    canToggleCamera,
+    facingMode,
+  } = recorder
 
   const setPhase = useCallback((next: DashcamPhase) => {
     phaseRef.current = next
@@ -194,6 +202,15 @@ export function DashcamCapture({
     void startCamera().catch(() => {})
   }
 
+  function handleToggleCamera() {
+    if (phase === "capturing") return
+    const srcObject = videoRef.current?.srcObject
+    if (srcObject && "getVideoTracks" in srcObject) {
+      srcObject.getVideoTracks().forEach((track) => track.stop())
+    }
+    void switchCamera()
+  }
+
   const error = recorder.error?.message ?? landmarkerState.error?.message ?? null
   const initializing =
     !error && (landmarkerState.status === "loading" || !recorder.stream)
@@ -214,7 +231,8 @@ export function DashcamCapture({
           playsInline
           muted
           className={cn(
-            "h-full w-full scale-x-[-1] object-cover transition-opacity duration-300",
+            "h-full w-full object-cover transition-opacity duration-300",
+            facingMode === "user" && "scale-x-[-1]",
             active ? "opacity-100" : "opacity-0",
           )}
         />
@@ -269,6 +287,20 @@ export function DashcamCapture({
             {statusMessage}
           </div>
         )}
+
+        {active && canToggleCamera && phase !== "capturing" && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="absolute right-3 bottom-3 z-10 border-white/15 bg-black/55 text-white hover:bg-black/70 hover:text-white"
+            disabled={disabled}
+            onClick={handleToggleCamera}
+          >
+            <SwitchCamera data-icon="inline-start" />
+            Alternar Cámara
+          </Button>
+        )}
       </div>
 
       {error && (
@@ -279,7 +311,7 @@ export function DashcamCapture({
       )}
 
       <p className="text-center text-sm text-muted-foreground">
-        Sin botones: ubica tu rostro dentro del óvalo y{" "}
+        Ubica tu rostro dentro del óvalo y{" "}
         <span className="font-medium text-foreground">parpadea</span> para confirmar.
         El video se envía automáticamente.
       </p>

@@ -15,6 +15,8 @@ export const RECORDING = {
   ] as const,
 } as const
 
+export type CameraFacingMode = "user" | "environment"
+
 export type CameraPermissionErrorCode =
   | "denied"
   | "not_found"
@@ -40,7 +42,28 @@ export function pickMimeType(): string | undefined {
   return undefined
 }
 
-export async function requestCameraStream(): Promise<MediaStream> {
+export function oppositeFacingMode(facingMode: CameraFacingMode): CameraFacingMode {
+  return facingMode === "user" ? "environment" : "user"
+}
+
+/**
+ * Cuenta cámaras físicas (`videoinput`). Antes del permiso de `getUserMedia`
+ * algunos navegadores ocultan o colapsan la lista; conviene reconsultar
+ * después de encender la cámara.
+ */
+export async function countVideoInputDevices(): Promise<number> {
+  if (!navigator.mediaDevices?.enumerateDevices) return 0
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    return devices.filter((device) => device.kind === "videoinput").length
+  } catch {
+    return 0
+  }
+}
+
+export async function requestCameraStream(
+  facingMode: CameraFacingMode = "user",
+): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new CameraError(
       "unsupported",
@@ -52,7 +75,7 @@ export async function requestCameraStream(): Promise<MediaStream> {
     return await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
-        facingMode: { ideal: "user" },
+        facingMode: { ideal: facingMode },
         width: { ideal: RECORDING.minWidth },
         height: { ideal: RECORDING.minHeight },
       },
