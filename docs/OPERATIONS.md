@@ -10,7 +10,7 @@ UI SPA para operadores Django con `is_superuser=True`:
    pipenv run python manage.py createsuperuser
    ```
 2. Abrir `http://localhost:<FRONTEND_PORT>/admin/login` (default `5173`; ver `FRONTEND_PORT` en `.env`)
-3. Gestionar tenants, rotar `api_key`, activar/desactivar usuarios y perfiles biométricos.
+3. Gestionar tenants, rotar `api_key`, activar/desactivar o eliminar usuarios (y sus perfiles biométricos) y desactivar embeddings.
 
 API bajo `/api/v1/admin/` (tag OpenAPI `admin`). Django Admin (`/admin/` del backend) y CLI siguen como escape hatch / automatización.
 

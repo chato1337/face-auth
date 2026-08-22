@@ -18,6 +18,7 @@ from rest_framework_simplejwt.tokens import Token
 
 from apps.accounts.models import TenantUser
 from apps.tenants.models import Application
+from apps.tenants.redirect_uris import parse_redirect_uris
 
 
 class TenantAccessToken(Token):
@@ -74,7 +75,7 @@ def normalize_redirect_uri(uri: str) -> str:
 
 
 def is_allowed_redirect(application: Application, redirect_uri: str) -> bool:
-    allowed = application.redirect_uris or []
+    allowed = parse_redirect_uris(application.redirect_uris or [])
     try:
         candidate = normalize_redirect_uri(redirect_uri)
     except InvalidRedirectUriError:

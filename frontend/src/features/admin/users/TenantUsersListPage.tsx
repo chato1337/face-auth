@@ -1,8 +1,10 @@
 import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 
+import { ApiError } from "@/api/client"
+import type { TenantUserAdmin } from "@/api/hooks/admin/types"
 import { useAdminApplication } from "@/api/hooks/admin/useApplications"
-import { useAdminTenantUsers } from "@/api/hooks/admin/useTenantUsers"
+import { useAdminTenantUsers, useDeleteTenantUser } from "@/api/hooks/admin/useTenantUsers"
 import { AdminShell } from "@/components/layout/AdminShell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,8 +13,27 @@ import { Spinner } from "@/components/ui/spinner"
 export function TenantUsersListPage() {
   const { appId = "" } = useParams()
   const [q, setQ] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const app = useAdminApplication(appId)
   const users = useAdminTenantUsers(appId, { q: q || undefined })
+  const deleteUser = useDeleteTenantUser()
+
+  async function onDelete(user: TenantUserAdmin) {
+    const name = `${user.first_name} ${user.last_name}`.trim()
+    if (
+      !window.confirm(
+        `¿Eliminar a ${name} y todos sus perfiles biométricos? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return
+    }
+    setError(null)
+    try {
+      await deleteUser.mutateAsync(user.id)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo eliminar el usuario.")
+    }
+  }
 
   return (
     <AdminShell
@@ -32,6 +53,8 @@ export function TenantUsersListPage() {
           className="max-w-sm"
         />
       </div>
+
+      {error ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
 
       {users.isLoading ? (
         <div className="flex justify-center py-12">
@@ -67,12 +90,23 @@ export function TenantUsersListPage() {
                     {user.active_profiles_count ?? 0}
                   </td>
                   <td className="py-3 text-right">
-                    <Link
-                      to={`/admin/users/${user.id}`}
-                      className="font-medium text-teal-800 underline-offset-4 hover:underline"
-                    >
-                      Abrir
-                    </Link>
+                    <div className="flex justify-end gap-3">
+                      <Link
+                        to={`/admin/users/${user.id}`}
+                        className="font-medium text-teal-800 underline-offset-4 hover:underline"
+                      >
+                        Abrir
+                      </Link>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        disabled={deleteUser.isPending}
+                        onClick={() => onDelete(user)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

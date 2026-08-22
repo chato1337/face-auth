@@ -170,6 +170,25 @@ class AdminTenantUserDetailView(APIView):
         user = self._get_user(user_id)
         return Response(TenantUserAdminSerializer(user).data)
 
+    @extend_schema(
+        tags=["admin"],
+        summary="Eliminar usuario y perfiles biométricos",
+        description=(
+            "Elimina de forma permanente el TenantUser y, por CASCADE, "
+            "todos sus BiometricProfile (embeddings) y OtpChallenge."
+        ),
+        responses={
+            204: OpenApiResponse(description="Usuario eliminado."),
+            404: OpenApiResponse(response=ErrorResponseSerializer, examples=[EX_USER_NOT_FOUND]),
+        },
+    )
+    def delete(self, request, user_id):
+        user = self._get_user(user_id)
+        if isinstance(user, Response):
+            return user
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class AdminBiometricProfileListView(APIView):
     permission_classes = [IsSuperUser]

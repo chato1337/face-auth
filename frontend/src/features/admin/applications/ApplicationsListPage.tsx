@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import { parseRedirectUris, urisToText } from "@/lib/redirectUris"
 
 const createSchema = z.object({
   name: z.string().min(1, "Nombre requerido").max(150),
@@ -29,10 +30,8 @@ type CreateValues = z.infer<typeof createSchema>
 /** URL del SSO hosted para probar el tenant desde el panel. */
 function tenantLoginHref(appId: string, redirectUris: unknown): string {
   const params = new URLSearchParams({ app_id: appId })
-  if (Array.isArray(redirectUris)) {
-    const first = redirectUris.find((u): u is string => typeof u === "string" && u.length > 0)
-    if (first) params.set("redirect_uri", first)
-  }
+  const first = parseRedirectUris(urisToText(redirectUris))[0]
+  if (first) params.set("redirect_uri", first)
   return `/login?${params.toString()}`
 }
 
@@ -58,10 +57,7 @@ export function ApplicationsListPage() {
   async function onCreate(values: CreateValues) {
     setError(null)
     setCreatedKey(null)
-    const redirect_uris = (values.redirect_uris_text ?? "")
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean)
+    const redirect_uris = parseRedirectUris(values.redirect_uris_text ?? "")
     try {
       const result = await create.mutateAsync({
         name: values.name,
@@ -112,7 +108,7 @@ export function ApplicationsListPage() {
               <Input id="name" {...form.register("name")} />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="redirect_uris_text">Redirect URIs (una por línea)</Label>
+              <Label htmlFor="redirect_uris_text">Redirect URIs (una por línea o separadas por coma)</Label>
               <Textarea id="redirect_uris_text" rows={3} {...form.register("redirect_uris_text")} />
             </div>
             <div className="space-y-1.5">

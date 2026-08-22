@@ -1,6 +1,15 @@
 from rest_framework import serializers
 
 from apps.tenants.models import Application
+from apps.tenants.redirect_uris import parse_redirect_uris
+
+
+class RedirectUrisValidationMixin:
+    def validate_redirect_uris(self, value):
+        try:
+            return parse_redirect_uris(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
 
 class ApplicationPublicSerializer(serializers.ModelSerializer):
@@ -19,7 +28,7 @@ class ApplicationPublicSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ApplicationAdminSerializer(serializers.ModelSerializer):
+class ApplicationAdminSerializer(RedirectUrisValidationMixin, serializers.ModelSerializer):
     """List/retrieve/update admin — nunca expone api_key."""
 
     users_count = serializers.IntegerField(read_only=True, required=False)
@@ -49,7 +58,7 @@ class ApplicationAdminSerializer(serializers.ModelSerializer):
         )
 
 
-class ApplicationAdminCreateSerializer(serializers.ModelSerializer):
+class ApplicationAdminCreateSerializer(RedirectUrisValidationMixin, serializers.ModelSerializer):
     """Alta de tenant; la respuesta one-shot incluye api_key vía ApplicationCreatedSerializer."""
 
     class Meta:
@@ -61,16 +70,6 @@ class ApplicationAdminCreateSerializer(serializers.ModelSerializer):
             "match_threshold",
             "is_active",
         )
-
-    def validate_redirect_uris(self, value):
-        if value is None:
-            return []
-        if not isinstance(value, list):
-            raise serializers.ValidationError("Debe ser una lista de URLs.")
-        for uri in value:
-            if not isinstance(uri, str) or not uri.strip():
-                raise serializers.ValidationError("Cada redirect_uri debe ser un string no vacío.")
-        return value
 
 
 class ApplicationCreatedSerializer(serializers.ModelSerializer):

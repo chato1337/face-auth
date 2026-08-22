@@ -177,7 +177,7 @@
   - [x] `POST /api/v1/admin/applications/{app_id}/rotate-api-key/` (devuelve la nueva clave **una sola vez**; no exponer `api_key` en list/retrieve habitual).
 - [x] Gestión de usuarios por tenant:
   - [x] `GET /api/v1/admin/applications/{app_id}/users/` (filtros: email, `is_active`; paginación).
-  - [x] `GET|PATCH /api/v1/admin/users/{user_id}/` (activar/desactivar, editar datos de perfil; **sin** crear usuarios por formulario admin en v1 — el alta biométrica sigue siendo el Flujo B).
+  - [x] `GET|PATCH|DELETE /api/v1/admin/users/{user_id}/` (activar/desactivar, editar datos de perfil, o eliminar con CASCADE de perfiles biométricos y OTP; **sin** crear usuarios por formulario admin en v1 — el alta biométrica sigue siendo el Flujo B).
 - [x] Perfiles biométricos (solo lectura + soft-deactivate):
   - [x] `GET /api/v1/admin/users/{user_id}/biometric-profiles/`
   - [x] `PATCH /api/v1/admin/biometric-profiles/{profile_id}/` (`is_active` únicamente; nunca devolver el vector `embedding` completo en listados).
@@ -194,7 +194,7 @@
 - [x] `AdminShell`: layout con navegación (Applications, logout); sin cards innecesarias — UI operativa clara.
 - [x] `ApplicationsListPage` + create/edit: alta de tenant, toggle `is_active`, edición de `redirect_uris` y umbrales.
 - [x] `ApplicationDetailPage`: resumen del tenant + acción "Rotar API key" con confirmación y visualización one-shot de la clave.
-- [x] `TenantUsersListPage` / `TenantUserDetailPage`: listado filtrable, activar/desactivar usuario, ver perfiles biométricos y desactivar embeddings.
+- [x] `TenantUsersListPage` / `TenantUserDetailPage`: listado filtrable, activar/desactivar o eliminar usuario (CASCADE de embeddings), ver perfiles biométricos y desactivar embeddings.
 - [x] Página / estado 403-friendly si el token deja de ser válido o el usuario pierde privilegios.
 
 ### 6.3 Documentación y cierre

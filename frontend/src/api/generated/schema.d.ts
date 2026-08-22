@@ -156,7 +156,11 @@ export interface paths {
         get: operations["v1_admin_users_retrieve"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Eliminar usuario y perfiles biométricos
+         * @description Elimina de forma permanente el TenantUser y, por CASCADE, todos sus BiometricProfile (embeddings) y OtpChallenge.
+         */
+        delete: operations["v1_admin_users_destroy"];
         options?: never;
         head?: never;
         /** Actualizar usuario tenant */
@@ -1076,6 +1080,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TenantUserAdmin"];
                 };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_admin_users_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usuario eliminado. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: {
                 headers: {

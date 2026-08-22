@@ -450,7 +450,7 @@ Prefijo: `/api/v1/admin/`. Tag OpenAPI: `admin`. Auth: `Authorization: Bearer <a
 | GET/PATCH | `/applications/{app_id}/` | Detalle / editar (name, active, redirect_uris, umbrales) |
 | POST | `/applications/{app_id}/rotate-api-key/` | Rotar clave; plaintext **one-shot** en la respuesta |
 | GET | `/applications/{app_id}/users/` | Usuarios del tenant (filtros + paginación) |
-| GET/PATCH | `/users/{user_id}/` | Detalle / activar-desactivar / editar perfil |
+| GET/PATCH/DELETE | `/users/{user_id}/` | Detalle / activar-desactivar / editar / eliminar (CASCADE perfiles + OTP) |
 | GET | `/users/{user_id}/biometric-profiles/` | Perfiles del usuario (**sin** vector embedding) |
 | PATCH | `/biometric-profiles/{profile_id}/` | Solo `is_active` (soft-deactivate) |
 

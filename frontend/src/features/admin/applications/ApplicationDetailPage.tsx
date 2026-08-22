@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import { parseRedirectUris, urisToText } from "@/lib/redirectUris"
 
 const editSchema = z.object({
   name: z.string().min(1).max(150),
@@ -27,11 +28,6 @@ const editSchema = z.object({
 })
 
 type EditValues = z.infer<typeof editSchema>
-
-function urisToText(uris: unknown): string {
-  if (!Array.isArray(uris)) return ""
-  return uris.filter((u): u is string => typeof u === "string").join("\n")
-}
 
 export function ApplicationDetailPage() {
   const { appId = "" } = useParams()
@@ -62,10 +58,7 @@ export function ApplicationDetailPage() {
       await update.mutateAsync({
         name: values.name,
         is_active: values.is_active,
-        redirect_uris: values.redirect_uris_text
-          .split("\n")
-          .map((s) => s.trim())
-          .filter(Boolean),
+        redirect_uris: parseRedirectUris(values.redirect_uris_text),
         liveness_threshold: values.liveness_threshold,
         match_threshold: values.match_threshold,
       })
@@ -148,7 +141,7 @@ export function ApplicationDetailPage() {
           <Label htmlFor="is_active">Activa</Label>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="redirect_uris_text">Redirect URIs</Label>
+          <Label htmlFor="redirect_uris_text">Redirect URIs (una por línea o separadas por coma)</Label>
           <Textarea id="redirect_uris_text" rows={4} {...form.register("redirect_uris_text")} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">

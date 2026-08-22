@@ -48,6 +48,22 @@ export function useUpdateTenantUser(userId: string) {
   })
 }
 
+export function useDeleteTenantUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiFetch<void>(`/api/v1/admin/users/${userId}/`, {
+        method: "DELETE",
+        adminAuth: true,
+      }),
+    onSuccess: (_data, userId) => {
+      void queryClient.removeQueries({ queryKey: ["admin", "user", userId] })
+      void queryClient.removeQueries({ queryKey: ["admin", "biometric-profiles", userId] })
+      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+    },
+  })
+}
+
 export function useAdminBiometricProfiles(userId: string | undefined) {
   return useQuery({
     queryKey: ["admin", "biometric-profiles", userId],

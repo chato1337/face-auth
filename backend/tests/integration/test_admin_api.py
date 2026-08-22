@@ -3,13 +3,17 @@ Tests de API admin (Fase 6) — operadores is_superuser.
 """
 from __future__ import annotations
 
+from datetime import timedelta
+
 import numpy as np
 import pytest
 from django.contrib.auth.models import User
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import BiometricProfile, TenantUser
+from apps.otp.models import OtpChallenge
 from apps.tenants.models import Application
 
 
@@ -163,6 +167,43 @@ class TestAdminApplications:
         assert rotate.data["api_key"] != old_key
         assert rotate.data["app_id"] == app_id
 
+    def test_patch_splits_comma_joined_redirect_uris(self, api, superuser):
+        _auth(api, superuser)
+        create = api.post(
+            "/api/v1/admin/applications/",
+            {
+                "name": "Mobile",
+                "redirect_uris": [
+                    "http://192.168.0.101:8443/auth/callback,"
+                    "https://mobile.ineac.xyz/auth/callback"
+                ],
+            },
+            format="json",
+        )
+        assert create.status_code == 201
+        assert create.data["redirect_uris"] == [
+            "http://192.168.0.101:8443/auth/callback",
+            "https://mobile.ineac.xyz/auth/callback",
+        ]
+
+        patch = api.patch(
+            f"/api/v1/admin/applications/{create.data['app_id']}/",
+            {
+                "redirect_uris": [
+                    "http://192.168.0.101:8443/auth/callback,"
+                    "https://mobile.ineac.xyz/auth/callback,"
+                    "https://app.ineac.xyz/auth/callback"
+                ]
+            },
+            format="json",
+        )
+        assert patch.status_code == 200
+        assert patch.data["redirect_uris"] == [
+            "http://192.168.0.101:8443/auth/callback",
+            "https://mobile.ineac.xyz/auth/callback",
+            "https://app.ineac.xyz/auth/callback",
+        ]
+
     def test_staff_cannot_list(self, api, staff_user, application):
         _auth(api, staff_user)
         res = api.get("/api/v1/admin/applications/")
@@ -216,6 +257,48 @@ class TestAdminUsersAndProfiles:
         assert soft.data["is_active"] is False
         biometric_profile.refresh_from_db()
         assert biometric_profile.is_active is False
+
+    def test_delete_user_cascades_profiles_and_otp(
+        self,
+        api,
+        superuser,
+        application,
+        tenant_user,
+        biometric_profile,
+    ):
+        OtpChallenge.objects.create(
+            user=tenant_user,
+            application=application,
+            purpose=OtpChallenge.Purpose.EMAIL_VERIFY,
+            destination_hash="a" * 64,
+            code_hash="b" * 64,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        profile_id = biometric_profile.id
+        user_id = tenant_user.id
+
+        _auth(api, superuser)
+        res = api.delete(f"/api/v1/admin/users/{user_id}/")
+        assert res.status_code == 204
+        assert not TenantUser.objects.filter(pk=user_id).exists()
+        assert not BiometricProfile.objects.filter(pk=profile_id).exists()
+        assert not OtpChallenge.objects.filter(user_id=user_id).exists()
+
+        missing = api.get(f"/api/v1/admin/users/{user_id}/")
+        assert missing.status_code == 404
+        assert missing.data["code"] == "user_not_found"
+
+    def test_delete_user_not_found(self, api, superuser):
+        _auth(api, superuser)
+        res = api.delete("/api/v1/admin/users/00000000-0000-0000-0000-000000000000/")
+        assert res.status_code == 404
+        assert res.data["code"] == "user_not_found"
+
+    def test_delete_user_staff_forbidden(self, api, staff_user, tenant_user):
+        _auth(api, staff_user)
+        res = api.delete(f"/api/v1/admin/users/{tenant_user.id}/")
+        assert res.status_code == 403
+        assert TenantUser.objects.filter(pk=tenant_user.id).exists()
 
     def test_admin_routes_do_not_require_app_id_header(self, api, superuser):
         _auth(api, superuser)

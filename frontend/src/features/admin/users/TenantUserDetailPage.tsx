@@ -1,10 +1,11 @@
 import { useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 
 import { ApiError } from "@/api/client"
 import {
   useAdminBiometricProfiles,
   useAdminTenantUser,
+  useDeleteTenantUser,
   useUpdateBiometricProfile,
   useUpdateTenantUser,
 } from "@/api/hooks/admin/useTenantUsers"
@@ -14,9 +15,11 @@ import { Spinner } from "@/components/ui/spinner"
 
 export function TenantUserDetailPage() {
   const { userId = "" } = useParams()
+  const navigate = useNavigate()
   const user = useAdminTenantUser(userId)
   const profiles = useAdminBiometricProfiles(userId)
   const updateUser = useUpdateTenantUser(userId)
+  const deleteUser = useDeleteTenantUser()
   const updateProfile = useUpdateBiometricProfile()
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +42,26 @@ export function TenantUserDetailPage() {
       setMessage(isActive ? "Perfil biométrico desactivado." : "Perfil biométrico activado.")
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo actualizar el perfil.")
+    }
+  }
+
+  async function onDelete() {
+    if (!user.data) return
+    const name = `${user.data.first_name} ${user.data.last_name}`.trim()
+    if (
+      !window.confirm(
+        `¿Eliminar a ${name} y todos sus perfiles biométricos? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return
+    }
+    setError(null)
+    try {
+      const appId = user.data.app_id
+      await deleteUser.mutateAsync(userId)
+      navigate(`/admin/applications/${appId}/users`)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo eliminar el usuario.")
     }
   }
 
@@ -163,6 +186,24 @@ export function TenantUserDetailPage() {
           </table>
         </div>
       )}
+
+      <section className="mt-10 max-w-xl border-t border-red-200 pt-6">
+        <h2 className="mb-2 text-sm font-semibold tracking-wide text-red-800 uppercase">
+          Zona peligrosa
+        </h2>
+        <p className="mb-4 text-sm text-zinc-600">
+          Elimina el usuario, todos sus embeddings biométricos y el historial de OTP. El email
+          quedará libre para un nuevo registro en este tenant. No se puede deshacer.
+        </p>
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={onDelete}
+          disabled={deleteUser.isPending}
+        >
+          {deleteUser.isPending ? "Eliminando…" : "Eliminar usuario y perfiles"}
+        </Button>
+      </section>
     </AdminShell>
   )
 }

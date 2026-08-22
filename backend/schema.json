@@ -802,6 +802,55 @@
                         "description": "Email duplicado en el tenant"
                     }
                 }
+            },
+            "delete": {
+                "operationId": "v1_admin_users_destroy",
+                "description": "Elimina de forma permanente el TenantUser y, por CASCADE, todos sus BiometricProfile (embeddings) y OtpChallenge.",
+                "summary": "Eliminar usuario y perfiles biométricos",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "user_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Usuario eliminado."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                },
+                                "examples": {
+                                    "UsuarioNoEncontrado": {
+                                        "value": {
+                                            "code": "user_not_found",
+                                            "message": "Usuario no encontrado.",
+                                            "field": "user_id"
+                                        },
+                                        "summary": "Usuario no encontrado"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
             }
         },
         "/api/v1/admin/users/{user_id}/biometric-profiles/": {
